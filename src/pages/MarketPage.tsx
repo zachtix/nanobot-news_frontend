@@ -99,7 +99,7 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
     });
 
   useEffect(() => {
-    // Disabled sources are listed too: their stories are still in the database, they are just not fetched.
+    // Every source: "enabled" only controls the scheduler's automatic fetch; a market run fetches all chosen ones.
     api.listSources().then(setSources, () => setSources([]));
   }, []);
 
@@ -145,9 +145,6 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
     update({ sourceIds: ids.length === sources.length ? [] : ids });
   };
 
-  const selected = validIds.length ? sources.filter((s) => validIds.includes(s.id)) : sources;
-  const noneFetchable = sources.length > 0 && !selected.some((s) => s.enabled);
-
   const estimate = preview ? preview.estimate.market + (setup.analyzeMissing ? preview.estimate.stories : 0) : 0;
   const canRun = aiOn && !busy && preview !== null && (preview.storyCount > 0 || (setup.refresh && preview.staleSources.length > 0));
 
@@ -190,15 +187,8 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
               {t('market.allSources')}
             </ToggleGroupItem>
             {sources.map((s) => (
-              <ToggleGroupItem
-                key={s.id}
-                value={String(s.id)}
-                aria-label={s.name}
-                title={s.enabled ? undefined : t('market.sourceOffTitle')}
-                className="px-3"
-              >
+              <ToggleGroupItem key={s.id} value={String(s.id)} className="px-3">
                 {s.name}
-                {!s.enabled && <span className="text-xs font-normal text-muted-foreground">{t('market.sourceOff')}</span>}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -211,15 +201,10 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
               <Label htmlFor="market-refresh" className="font-normal">
                 {t('market.refresh')}
               </Label>
-              {setup.refresh && noneFetchable ? (
-                <span className="text-xs text-warning">{t('market.refreshNoneEnabled')}</span>
-              ) : (
-                preview &&
-                setup.refresh && (
-                  <span className="text-xs text-muted-foreground">
-                    {preview.staleSources.length ? t('market.refreshStale', { names: preview.staleSources.join(', ') }) : t('market.refreshFresh')}
-                  </span>
-                )
+              {preview && setup.refresh && (
+                <span className="text-xs text-muted-foreground">
+                  {preview.staleSources.length ? t('market.refreshStale', { names: preview.staleSources.join(', ') }) : t('market.refreshFresh')}
+                </span>
               )}
             </div>
           </div>
