@@ -1,0 +1,142 @@
+import type {
+  AiCallLog,
+  AiSettings,
+  AiSettingsPatch,
+  ConnectionTestResult,
+  MarketPreview,
+  MarketRequest,
+  MarketRun,
+  MarketRunDetail,
+  MarketWindow,
+  ModelInfo,
+  PromptExample,
+  PromptName,
+  SettingsWarning,
+  AiAccount,
+  AiUsageCall,
+  AiUsageSummary,
+  AssetOption,
+  DetectionResult,
+  FetchedItem,
+  FetchRun,
+  FetchStatus,
+  Health,
+  News,
+  NewsAnalysis,
+  NewsQuery,
+  NewsStats,
+  Paginated,
+  SchedulerStatus,
+  Source,
+  SourceInput,
+  TranslationStatus,
+} from './types';
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+
+async function request<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+  const { json, headers, ...rest } = init;
+  const res = await fetch(`${BASE}/api${path}`, {
+    ...rest,
+    headers: json === undefined ? headers : { 'Content-Type': 'application/json', ...headers },
+    body: json === undefined ? rest.body : JSON.stringify(json),
+  });
+  if (res.status === 204) return undefined as T;
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `HTTP ${res.status}`, data?.details);
+  return data as T;
+}
+
+export function toQuery(params: Record<string, string | number | boolean | undefined | null>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+/** Human-readable message including validation details from the API. */
+export function describeError(err: unknown): string {
+  if (err instanceof ApiError && Array.isArray(err.details) && err.details.length) {
+    const parts = err.details.map((d: { path?: string; message?: string }) =>
+      d.path ? `${d.path}: ${d.message}` : String(d.message),
+    );
+    return `${err.message} (${parts.join(', ')})`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+export const api = {
+  health: () => request<Health>('/health'),
+
+  listNews: (query: NewsQuery = {}) => request<Paginated<News>>(`/news${toQuery({ ...query })}`),
+  newsStats: () => request<NewsStats>('/news/stats'),
+  deleteNews: (id: number) => request<void>(`/news/${id}`, { method: 'DELETE' }),
+  translateNews: (id: number) => request<News>(`/news/${id}/translate`, { method: 'POST' }),
+  /** Returns the stored analysis, or runs the AI once if the story has none (force = re-analyse). */
+  analyzeNews: (id: number, force = false) =>
+    request<{ analysis: NewsAnalysis; cached: boolean }>(`/news/${id}/analysis`, {
+      method: 'POST',
+      json: force ? { force } : {},
+    }),
+  newsAssets: () => request<AssetOption[]>('/news/assets'),
+
+  translationStatus: () => request<TranslationStatus>('/translate/status'),
+  runTranslation: (opts: { limit?: number; includeFailed?: boolean } = {}) =>
+    request<TranslationStatus>('/translate/run', { method: 'POST', json: opts }),
+
+  listSources: () => request<Source[]>('/sources'),
+  detectSource: (url: string) => request<DetectionResult>('/sources/detect', { method: 'POST', json: { url } }),
+  previewSource: (input: Required<Pick<SourceInput, 'url' | 'type'>> & SourceInput) =>
+    request<{ count: number; items: FetchedItem[] }>('/sources/preview', { method: 'POST', json: input }),
+  createSource: (input: SourceInput) => request<Source>('/sources', { method: 'POST', json: input }),
+  updateSource: (id: number, patch: Partial<SourceInput>) =>
+    request<Source>(`/sources/${id}`, { method: 'PUT', json: patch }),
+  deleteSource: (id: number) => request<void>(`/sources/${id}`, { method: 'DELETE' }),
+
+  runFetch: (sourceIds?: number[]) =>
+    request<FetchRun>('/fetch/run', { method: 'POST', json: sourceIds?.length ? { sourceIds } : {} }),
+  fetchStatus: () => request<FetchStatus>('/fetch/status'),
+  listRuns: (query: { page?: number; limit?: number } = {}) => request<Paginated<FetchRun>>(`/fetch/runs${toQuery(query)}`),
+
+  aiUsageSummary: (days = 30) => request<AiUsageSummary>(`/ai-usage/summary${toQuery({ days })}`),
+  aiUsageCalls: (
+    query: { page?: number; limit?: number; fetchRunId?: number; success?: boolean; purpose?: string } = {},
+  ) =>
+    request<Paginated<AiUsageCall>>(`/ai-usage/calls${toQuery(query)}`),
+  /** Full prompt + raw reply of one call (404 if not logged or pruned). */
+  aiCallLog: (usageId: number) => request<AiCallLog>(`/ai-usage/calls/${usageId}/log`),
+  aiAccount: (refresh = false) => request<AiAccount>(`/ai-usage/account${refresh ? '?refresh=1' : ''}`),
+
+  getAiSettings: () => request<AiSettings>('/settings/ai'),
+  updateAiSettings: (patch: AiSettingsPatch) =>
+    request<{ settings: AiSettings; warnings: SettingsWarning[] }>('/settings/ai', { method: 'PUT', json: patch }),
+  /** Check a key/model without saving (current settings are used for anything omitted). */
+  testAiConnection: (candidate: { apiKey?: string; model?: string } = {}) =>
+    request<ConnectionTestResult>('/settings/ai/test', { method: 'POST', json: candidate }),
+  listModels: () => request<ModelInfo[]>('/settings/ai/models'),
+  promptExamples: () => request<Record<PromptName, PromptExample>>('/settings/ai/examples'),
+
+  marketPreview: (window: MarketWindow, sourceIds: number[]) =>
+    request<MarketPreview>(`/market/preview${toQuery({ window, sourceIds: sourceIds.join(',') || undefined })}`),
+  startMarket: (body: MarketRequest) => request<MarketRun>('/market/analyses', { method: 'POST', json: body }),
+  marketRuns: (page = 1, limit = 10) => request<Paginated<MarketRun>>(`/market/analyses${toQuery({ page, limit })}`),
+  marketRun: (id: number) => request<MarketRunDetail>(`/market/analyses/${id}`),
+
+  getScheduler: () => request<SchedulerStatus>('/scheduler'),
+  updateScheduler: (patch: { enabled?: boolean; cron?: string }) =>
+    request<SchedulerStatus>('/scheduler', { method: 'PUT', json: patch }),
+};
