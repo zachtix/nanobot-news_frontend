@@ -57,7 +57,7 @@ const ALL = 'all';
 export function AiUsagePage() {
   const { completedRun } = useFetchStatus();
   const { t } = useI18n();
-  const [days, setDays] = useState<number>(30);
+  const [days, setDays] = useState<number>(1);
   const [summary, setSummary] = useState<AiUsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 

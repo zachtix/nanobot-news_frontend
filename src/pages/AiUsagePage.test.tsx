@@ -240,8 +240,9 @@ describe('AiUsagePage', () => {
     const spy = vi.mocked(api.aiUsageSummary);
     renderPage(<AiUsagePage />, { path: '/ai-usage' });
     await screen.findByRole('group', { name: 'เครดิตที่ใช้' });
-    expect(spy).toHaveBeenLastCalledWith(30);
-    expect(screen.getByRole('radio', { name: '30 วัน' })).toHaveAttribute('aria-checked', 'true');
+    // opens on the last day
+    expect(spy).toHaveBeenLastCalledWith(1);
+    expect(screen.getByRole('radio', { name: '1 วัน' })).toHaveAttribute('aria-checked', 'true');
 
     await user.click(screen.getByRole('radio', { name: '7 วัน' }));
     await waitFor(() => expect(spy).toHaveBeenLastCalledWith(7));
