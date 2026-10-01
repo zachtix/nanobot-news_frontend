@@ -150,7 +150,9 @@ describe('MarketPage', () => {
     expect(within(setup).getByText(/จะดึงใหม่: CoinDesk/)).toBeInTheDocument();
     expect(within(setup).getByText(/73 ข่าว · ประมาณ \$0\.19/)).toBeInTheDocument();
     expect(within(setup).getByText('ค่าใช้จ่ายโดยประมาณ $0.018')).toBeInTheDocument();
-    expect(within(setup).queryByRole('radio', { name: 'Disabled' })).not.toBeInTheDocument();
+    // a source with fetching turned off can still be picked (its stored stories), marked as off
+    expect(within(within(setup).getByRole('button', { name: 'Disabled' })).getByText('ปิดอยู่')).toBeInTheDocument();
+    expect(within(setup).queryByText(/ปิดการดึงข่าวอยู่ทั้งหมด/)).not.toBeInTheDocument();
 
     await user.click(within(setup).getByRole('radio', { name: '7 วัน' }));
     await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('7d', []));
@@ -174,6 +176,16 @@ describe('MarketPage', () => {
     expect(screen.getByText(/วิเคราะห์รายข่าวเพิ่ม 73 ข่าว/)).toBeInTheDocument();
     // The run's own setup is remembered for next time.
     expect(JSON.parse(localStorage.getItem('market:setup')!)).toMatchObject({ window: '7d', sourceIds: [2], analyzeMissing: true });
+  });
+
+  it('says when every chosen source has fetching turned off', async () => {
+    const user = userEvent.setup();
+    renderPage(<MarketPage />, { path: '/market' });
+    const setup = await screen.findByRole('region', { name: 'ตั้งค่าการวิเคราะห์' });
+
+    await user.click(await within(setup).findByRole('button', { name: 'Disabled' }));
+    await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('1d', [3]));
+    expect(within(setup).getByText(/แหล่งที่เลือกปิดการดึงข่าวอยู่ทั้งหมด/)).toBeInTheDocument();
   });
 
   it('tells when the same data was analysed before and when a result was reused', async () => {

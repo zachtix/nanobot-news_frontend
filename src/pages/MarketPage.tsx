@@ -99,10 +99,11 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
     });
 
   useEffect(() => {
-    api.listSources().then((list) => setSources(list.filter((s) => s.enabled)), () => setSources([]));
+    // Disabled sources are listed too: their stories are still in the database, they are just not fetched.
+    api.listSources().then(setSources, () => setSources([]));
   }, []);
 
-  // Drop selections of sources that no longer exist / are disabled.
+  // Drop selections of sources that no longer exist.
   const validIds = useMemo(() => setup.sourceIds.filter((id) => sources.some((s) => s.id === id)), [setup.sourceIds, sources]);
   const sourcesKey = validIds.join(',');
 
@@ -143,6 +144,9 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
     const ids = pickedAll ? [] : values.filter((v) => v !== ALL).map(Number);
     update({ sourceIds: ids.length === sources.length ? [] : ids });
   };
+
+  const selected = validIds.length ? sources.filter((s) => validIds.includes(s.id)) : sources;
+  const noneFetchable = sources.length > 0 && !selected.some((s) => s.enabled);
 
   const estimate = preview ? preview.estimate.market + (setup.analyzeMissing ? preview.estimate.stories : 0) : 0;
   const canRun = aiOn && !busy && preview !== null && (preview.storyCount > 0 || (setup.refresh && preview.staleSources.length > 0));
@@ -186,8 +190,15 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
               {t('market.allSources')}
             </ToggleGroupItem>
             {sources.map((s) => (
-              <ToggleGroupItem key={s.id} value={String(s.id)} className="px-3">
+              <ToggleGroupItem
+                key={s.id}
+                value={String(s.id)}
+                aria-label={s.name}
+                title={s.enabled ? undefined : t('market.sourceOffTitle')}
+                className="px-3"
+              >
                 {s.name}
+                {!s.enabled && <span className="text-xs font-normal text-muted-foreground">{t('market.sourceOff')}</span>}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -200,10 +211,15 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
               <Label htmlFor="market-refresh" className="font-normal">
                 {t('market.refresh')}
               </Label>
-              {preview && setup.refresh && (
-                <span className="text-xs text-muted-foreground">
-                  {preview.staleSources.length ? t('market.refreshStale', { names: preview.staleSources.join(', ') }) : t('market.refreshFresh')}
-                </span>
+              {setup.refresh && noneFetchable ? (
+                <span className="text-xs text-warning">{t('market.refreshNoneEnabled')}</span>
+              ) : (
+                preview &&
+                setup.refresh && (
+                  <span className="text-xs text-muted-foreground">
+                    {preview.staleSources.length ? t('market.refreshStale', { names: preview.staleSources.join(', ') }) : t('market.refreshFresh')}
+                  </span>
+                )
               )}
             </div>
           </div>
