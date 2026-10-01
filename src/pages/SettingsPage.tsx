@@ -1,5 +1,6 @@
-import { Check, ChevronsUpDown, CircleCheck, CircleX, KeyRound, Loader2, PlugZap, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
+import { Bot, Check, ChevronsUpDown, CircleCheck, CircleX, KeyRound, Loader2, PlugZap, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { PROVIDER_LABEL, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +15,14 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Textarea } from '@/components/ui/textarea';
 import { api, describeError } from '@/api/client';
 import type {
   AiSettings,
   AiSettingsPatch,
   ConnectionTestResult,
+  LlmProvider,
   ModelInfo,
   PromptExample,
   PromptName,
@@ -53,7 +56,8 @@ export function SettingsPage() {
     const res = await api.updateAiSettings(patch);
     setSettings(res.settings);
     setWarnings(res.warnings);
-    if (patch.apiKey !== undefined || patch.model !== undefined || patch.showModel !== undefined) refreshHealth();
+    const affectsHeader = [patch.provider, patch.apiKey, patch.model, patch.anthropic, patch.showModel].some((v) => v !== undefined);
+    if (affectsHeader) refreshHealth();
     return true;
   };
 
@@ -86,9 +90,20 @@ export function SettingsPage() {
         </Alert>
       )}
 
-      <DisplayCard settings={settings} save={save} />
-      <KeysCard settings={settings} save={save} />
+      <ProviderCard settings={settings} save={save} />
+      {settings.provider.value === 'anthropic' ? (
+        <>
+          <AnthropicKeyCard settings={settings} save={save} />
+          <KeysCard settings={settings} save={save} />
+        </>
+      ) : (
+        <>
+          <KeysCard settings={settings} save={save} />
+          <AnthropicKeyCard settings={settings} save={save} />
+        </>
+      )}
       <ModelCard settings={settings} save={save} />
+      <DisplayCard settings={settings} save={save} />
       <PromptsCard settings={settings} save={save} />
     </div>
   );
@@ -97,6 +112,7 @@ export function SettingsPage() {
 function warningText(w: SettingsWarning, t: ReturnType<typeof useI18n>['t']): string {
   if (w.code === 'promptNoJson') return t('settings.warn.promptNoJson', { prompt: t(`settings.prompt.${w.prompt}`) });
   if (w.code === 'modelNoJson') return t('settings.warn.modelNoJson', { model: w.model });
+  if (w.code === 'providerNoKey') return t('settings.warn.providerNoKey', { provider: PROVIDER_LABEL[w.provider] });
   return t('settings.warn.modelNotFound', { model: w.model });
 }
 
@@ -147,7 +163,9 @@ function TestResult({ result }: { result: ConnectionTestResult }) {
     <ul className="flex flex-col gap-1 rounded-lg border bg-surface-sunken p-3 text-sm" aria-label={t('settings.test')}>
       {line(
         result.key.ok,
-        result.key.ok
+        result.key.ok && result.provider === 'anthropic'
+          ? t('settings.testKeyOkNoBalance')
+          : result.key.ok
           ? t('settings.testKeyOk', {
               label: result.key.label ?? '-',
               remaining: result.key.limitRemaining == null ? '∞' : formatCredit(result.key.limitRemaining),
@@ -168,7 +186,7 @@ function useConnectionTest() {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ConnectionTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const test = async (candidate: { apiKey?: string; model?: string }) => {
+  const test = async (candidate: { provider: LlmProvider; apiKey?: string; model?: string }) => {
     setTesting(true);
     setError(null);
     setResult(null);
@@ -222,8 +240,10 @@ function SecretRow({
   onSave,
   onRemove,
   extra,
+  placeholder = 'sk-or-v1-…',
 }: {
   id: string;
+  placeholder?: string;
   label: string;
   help: string;
   inputLabel: string;
@@ -245,7 +265,7 @@ function SecretRow({
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-64 flex-1 flex-col gap-1.5">
           <Label htmlFor={id}>{inputLabel}</Label>
-          <Input id={id} type="password" autoComplete="off" placeholder="sk-or-v1-…" value={value} onChange={(e) => setValue(e.target.value)} />
+          <Input id={id} type="password" autoComplete="off" placeholder={placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
         </div>
         <Button disabled={!value.trim() || busy} onClick={() => onSave(value.trim(), () => setValue(''))}>
           {busy ? t('common.saving') : t('common.save')}
@@ -295,7 +315,11 @@ function KeysCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
           onSave={(apiKey, clear) => saver.run({ apiKey }, clear)}
           onRemove={() => saver.run({ apiKey: null })}
           extra={(candidate) => (
-            <Button variant="outline" disabled={conn.testing} onClick={() => conn.test(candidate ? { apiKey: candidate } : {})}>
+            <Button
+              variant="outline"
+              disabled={conn.testing}
+              onClick={() => conn.test({ provider: 'openrouter', ...(candidate ? { apiKey: candidate } : {}) })}
+            >
               {conn.testing ? <Loader2 className="animate-spin" aria-hidden /> : <PlugZap aria-hidden />}
               {conn.testing ? t('settings.testing') : candidate ? t('settings.testNew') : t('settings.test')}
             </Button>
@@ -320,7 +344,109 @@ function KeysCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
   );
 }
 
-/** Searchable OpenRouter model picker (shadcn Popover + Command). Free text is allowed too. */
+/** Which provider every AI call goes to. Saved as soon as one is picked. */
+function ProviderCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
+  const { t } = useI18n();
+  const saver = useSaver(save);
+  const active = settings.provider.value;
+  const keyOf = (p: LlmProvider) => (p === 'openrouter' ? settings.apiKey : settings.anthropic.apiKey);
+  const modelOf = (p: LlmProvider) => (p === 'openrouter' ? settings.model.value : settings.anthropic.model.value);
+
+  return (
+    <Card role="region" aria-label={t('settings.providerTitle')}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bot className="size-4 text-primary" aria-hidden />
+          {t('settings.providerTitle')}
+        </CardTitle>
+        <CardDescription>{t('settings.providerHelp')}</CardDescription>
+        <CardAction>
+          <SourceBadge source={settings.provider.source} />
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          spacing={3}
+          value={active}
+          disabled={saver.busy}
+          onValueChange={(v) => v && v !== active && saver.run({ provider: v as LlmProvider })}
+          aria-label={t('settings.providerTitle')}
+          className="grid w-full grid-cols-1 sm:grid-cols-2"
+        >
+          {PROVIDERS.map((p) => {
+            const key = keyOf(p);
+            return (
+              <ToggleGroupItem
+                key={p}
+                value={p}
+                aria-label={PROVIDER_LABEL[p]}
+                className="h-auto w-full flex-col items-start justify-start gap-1.5 p-3 text-left font-normal whitespace-normal data-[state=on]:border-primary data-[state=on]:bg-primary/5"
+              >
+                <span className="flex w-full flex-wrap items-center gap-2">
+                  <strong className="text-base">{PROVIDER_LABEL[p]}</strong>
+                  {p === active && <Badge variant="info">{t('settings.providerActive')}</Badge>}
+                  <Badge variant={key.configured ? 'success' : 'warning'} className="ml-auto">
+                    {key.configured ? t('settings.providerKeySet') : t('settings.providerNoKey')}
+                  </Badge>
+                </span>
+                <span className="text-xs text-muted-foreground">{t(`settings.provider.${p}`)}</span>
+                <code className="font-mono text-xs">{modelOf(p)}</code>
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+        <NoticeLine notice={saver.notice} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function AnthropicKeyCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
+  const { t } = useI18n();
+  const saver = useSaver(save);
+  const conn = useConnectionTest();
+
+  return (
+    <Card role="region" aria-label={t('settings.anthropicTitle')}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="size-4 text-primary" aria-hidden />
+          {t('settings.anthropicTitle')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <SecretRow
+          id="anthropic-key"
+          label={t('settings.apiKey')}
+          help={t('settings.anthropicKeyHelp')}
+          inputLabel={t('settings.newKey')}
+          placeholder="sk-ant-api03-…"
+          view={settings.anthropic.apiKey}
+          busy={saver.busy}
+          onSave={(apiKey, clear) => saver.run({ anthropic: { apiKey } }, clear)}
+          onRemove={() => saver.run({ anthropic: { apiKey: null } })}
+          extra={(candidate) => (
+            <Button
+              variant="outline"
+              disabled={conn.testing}
+              onClick={() => conn.test({ provider: 'anthropic', ...(candidate ? { apiKey: candidate } : {}) })}
+            >
+              {conn.testing ? <Loader2 className="animate-spin" aria-hidden /> : <PlugZap aria-hidden />}
+              {conn.testing ? t('settings.testing') : candidate ? t('settings.testNew') : t('settings.test')}
+            </Button>
+          )}
+        />
+        <NoticeLine notice={saver.notice} />
+        {conn.error && <p className="text-sm text-danger">{conn.error}</p>}
+        {conn.result && <TestResult result={conn.result} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Searchable model picker (shadcn Popover + Command). Free text is allowed too. */
 function ModelPicker({ value, onChange, models }: { value: string; onChange: (v: string) => void; models: ModelInfo[] }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -381,34 +507,70 @@ function ModelPicker({ value, onChange, models }: { value: string; onChange: (v:
   );
 }
 
+/** The model of each provider (opens on the provider in use). */
 function ModelCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
   const { t } = useI18n();
-  const [model, setModel] = useState(settings.model.value);
+  const [provider, setProvider] = useState<LlmProvider>(settings.provider.value);
+  const current = provider === 'anthropic' ? settings.anthropic.model : settings.model;
+  // The Anthropic list depends on the key, so it is reloaded when the key changes.
+  const keyMasked = provider === 'anthropic' ? settings.anthropic.apiKey.masked : settings.apiKey.masked;
+  const [model, setModel] = useState(current.value);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const saver = useSaver(save);
   const conn = useConnectionTest();
 
-  useEffect(() => setModel(settings.model.value), [settings.model.value]);
+  useEffect(() => setProvider(settings.provider.value), [settings.provider.value]);
+  useEffect(() => setModel(current.value), [current.value, provider]);
   useEffect(() => {
-    api.listModels().then(setModels, (err) => setModelsError(describeError(err)));
-  }, []);
+    let alive = true;
+    setModels([]);
+    setModelsError(null);
+    api.listModels(provider).then(
+      (list) => alive && setModels(list),
+      (err) => alive && setModelsError(describeError(err)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [provider, keyMasked]);
 
-  const info = useMemo(() => models.find((m) => m.id === model.trim()), [models, model]);
-  const dirty = model.trim() !== settings.model.value;
+  // An alias such as "claude-haiku-4-5" matches its dated release.
+  const info = useMemo(
+    () => models.find((m) => m.id === model.trim()) ?? models.find((m) => model.trim() && m.id.startsWith(`${model.trim()}-`)),
+    [models, model],
+  );
+  const dirty = model.trim() !== current.value;
+  const patchFor = (value: string | null): AiSettingsPatch => (provider === 'anthropic' ? { anthropic: { model: value } } : { model: value });
 
   return (
     <Card role="region" aria-label={t('settings.modelTitle')}>
       <CardHeader>
         <CardTitle>{t('settings.modelTitle')}</CardTitle>
         <CardDescription>
-          {t('settings.modelHelp')} · {t('settings.modelDefault', { model: settings.model.envDefault })}
+          {provider === 'anthropic' ? t('settings.modelHelpAnthropic') : t('settings.modelHelp')} ·{' '}
+          {t('settings.modelDefault', { model: current.envDefault })}
         </CardDescription>
         <CardAction>
-          <SourceBadge source={settings.model.source} />
+          <SourceBadge source={current.source} />
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={provider}
+          onValueChange={(v) => v && setProvider(v as LlmProvider)}
+          aria-label={t('settings.modelFor')}
+        >
+          {PROVIDERS.map((p) => (
+            <ToggleGroupItem key={p} value={p} className="px-3">
+              {PROVIDER_LABEL[p]}
+              {p === settings.provider.value && <span className="size-1.5 rounded-full bg-primary" aria-hidden />}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
         <div className="flex max-w-xl flex-col gap-1.5">
           <Label htmlFor="model-id">{t('settings.model')}</Label>
           <ModelPicker value={model} onChange={setModel} models={models} />
@@ -425,21 +587,25 @@ function ModelCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
             )}
             {info.contextLength && <span className="text-muted-foreground">{t('settings.modelContext', { n: formatNumber(info.contextLength) })}</span>}
             <Badge variant={info.supportsJson ? 'success' : 'warning'}>
-              {info.supportsJson ? t('settings.modelJson') : t('settings.modelNoJsonBadge')}
+              {!info.supportsJson
+                ? t('settings.modelNoJsonBadge')
+                : provider === 'anthropic'
+                  ? t('settings.modelJsonPrompt')
+                  : t('settings.modelJson')}
             </Badge>
           </div>
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled={!dirty || !model.trim() || saver.busy} onClick={() => saver.run({ model: model.trim() })}>
+          <Button disabled={!dirty || !model.trim() || saver.busy} onClick={() => saver.run(patchFor(model.trim()))}>
             {saver.busy ? t('common.saving') : t('common.save')}
           </Button>
-          <Button variant="outline" disabled={conn.testing || !model.trim()} onClick={() => conn.test({ model: model.trim() })}>
+          <Button variant="outline" disabled={conn.testing || !model.trim()} onClick={() => conn.test({ provider, model: model.trim() })}>
             {conn.testing ? <Loader2 className="animate-spin" aria-hidden /> : <PlugZap aria-hidden />}
             {conn.testing ? t('settings.testing') : t('settings.testModel')}
           </Button>
-          {settings.model.source === 'settings' && (
-            <Button variant="ghost" disabled={saver.busy} onClick={() => saver.run({ model: null })}>
+          {current.source === 'settings' && (
+            <Button variant="ghost" disabled={saver.busy} onClick={() => saver.run(patchFor(null))}>
               <RotateCcw aria-hidden />
               {t('settings.resetModel')}
             </Button>

@@ -285,9 +285,30 @@ describe('AiUsagePage', () => {
     await waitFor(() => expect(calls).toHaveBeenLastCalledWith({ page: 1, limit: 10, success: false }));
   });
 
+  it('on Anthropic: shows the key status and where to see the credit (no balance API)', async () => {
+    accountSpy.mockResolvedValue({
+      enabled: true,
+      fetchedAt: '',
+      provider: 'anthropic',
+      verified: true,
+      key: null,
+      credits: null,
+      errors: [],
+    });
+    renderPage(<AiUsagePage />, { path: '/ai-usage' });
+    const card = await screen.findByRole('region', { name: 'เครดิต Anthropic' });
+    expect(await within(card).findByTestId('anthropic-key')).toHaveTextContent('ใช้ได้');
+    expect(within(card).getByText(/Anthropic ไม่มี API ให้ดูเครดิตคงเหลือ/)).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'เปิด console.anthropic.com' })).toHaveAttribute(
+      'href',
+      'https://console.anthropic.com/settings/billing',
+    );
+    expect(within(card).queryByRole('meter')).not.toBeInTheDocument();
+  });
+
   it('tells the user when no API key is configured', async () => {
     accountSpy.mockResolvedValue({ enabled: false, fetchedAt: '', key: null, credits: null, errors: [] });
     renderPage(<AiUsagePage />, { path: '/ai-usage' });
-    expect(await screen.findByText(/ยังไม่ได้ตั้ง OPENROUTER_API_KEY/)).toBeInTheDocument();
+    expect(await screen.findByText(/ยังไม่ได้ตั้ง API key ของ OpenRouter/)).toBeInTheDocument();
   });
 });

@@ -210,6 +210,7 @@ export interface UsageTotals {
 }
 
 export interface AiUsageSummary {
+  provider?: LlmProvider;
   model: string;
   aiEnabled: boolean;
   timezone: string;
@@ -281,9 +282,15 @@ export interface AiCallLog {
   createdAt: string;
 }
 
+/** Where AI calls go (switchable on the settings page). */
+export type LlmProvider = 'openrouter' | 'anthropic';
+
 export interface AiAccount {
   enabled: boolean;
   fetchedAt: string;
+  provider?: LlmProvider;
+  /** Key accepted by a provider that has no balance API (Anthropic). */
+  verified?: boolean;
   key: {
     label: string | null;
     usage: number;
@@ -315,7 +322,7 @@ export interface SchedulerStatus {
 
 export interface Health {
   status: string;
-  ai: { enabled: boolean; model: string };
+  ai: { enabled: boolean; provider?: LlmProvider; model: string };
   translation?: { enabled: boolean };
   analysis?: { enabled: boolean };
   tagging?: { enabled: boolean };
@@ -450,19 +457,31 @@ export interface SecretView {
   source: SettingSource;
 }
 
+export interface ModelSetting {
+  value: string;
+  source: 'settings' | 'env';
+  envDefault: string;
+}
+
 export interface AiSettings {
+  provider: { value: LlmProvider; source: 'settings' | 'env'; envDefault: LlmProvider };
+  /** OpenRouter */
   apiKey: SecretView;
   managementKey: SecretView;
-  model: { value: string; source: 'settings' | 'env'; envDefault: string };
+  model: ModelSetting;
+  /** Anthropic API (console.anthropic.com) */
+  anthropic: { apiKey: SecretView; model: ModelSetting };
   prompts: Record<PromptName, { value: string; isDefault: boolean; defaultValue: string }>;
   display: { showModel: boolean };
 }
 
 /** null resets a field to .env / the built-in prompt. */
 export interface AiSettingsPatch {
+  provider?: LlmProvider | null;
   apiKey?: string | null;
   managementKey?: string | null;
   model?: string | null;
+  anthropic?: { apiKey?: string | null; model?: string | null };
   prompts?: Partial<Record<PromptName, string | null>>;
   showModel?: boolean;
 }
@@ -470,7 +489,8 @@ export interface AiSettingsPatch {
 export type SettingsWarning =
   | { code: 'promptNoJson'; prompt: PromptName }
   | { code: 'modelNotFound'; model: string }
-  | { code: 'modelNoJson'; model: string };
+  | { code: 'modelNoJson'; model: string }
+  | { code: 'providerNoKey'; provider: LlmProvider };
 
 export interface ModelInfo {
   id: string;
@@ -484,6 +504,7 @@ export interface ModelInfo {
 
 export interface ConnectionTestResult {
   ok: boolean;
+  provider?: LlmProvider;
   key: { ok: boolean; label?: string | null; limitRemaining?: number | null; error?: string };
   model: { ok: boolean; id: string; latencyMs?: number; cost?: number | null; error?: string };
 }

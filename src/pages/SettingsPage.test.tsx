@@ -9,6 +9,11 @@ import { SettingsPage } from './SettingsPage';
 const DEFAULT_DEDUP = 'You are a news de-duplication engine. Reply with JSON only.';
 
 const baseSettings = (): AiSettings => ({
+  provider: { value: 'openrouter', source: 'env', envDefault: 'openrouter' },
+  anthropic: {
+    apiKey: { configured: false, masked: null, source: 'none' },
+    model: { value: 'claude-haiku-4-5', source: 'env', envDefault: 'claude-haiku-4-5' },
+  },
   apiKey: { configured: true, masked: 'sk-or-v1-f…af96', source: 'env' },
   managementKey: { configured: false, masked: null, source: 'none' },
   model: { value: 'google/gemini-3.8-flash', source: 'env', envDefault: 'google/gemini-3.8-flash' },
@@ -61,6 +66,9 @@ describe('SettingsPage', () => {
       if (patch.apiKey) s.apiKey = { configured: true, masked: 'sk-or-v1-n…w123', source: 'settings' };
       if (patch.model) s.model = { ...s.model, value: patch.model, source: 'settings' };
       if (patch.showModel !== undefined) s.display = { showModel: patch.showModel };
+      if (patch.provider) s.provider = { ...s.provider, value: patch.provider, source: 'settings' };
+      if (patch.anthropic?.apiKey) s.anthropic.apiKey = { configured: true, masked: 'sk-ant-api…k123', source: 'settings' };
+      if (patch.anthropic?.model) s.anthropic.model = { ...s.anthropic.model, value: patch.anthropic.model, source: 'settings' };
       return { settings: s, warnings: [] };
     });
   });
@@ -102,10 +110,10 @@ describe('SettingsPage', () => {
     const card = await screen.findByRole('region', { name: 'OpenRouter API key' });
 
     await user.click(within(card).getByRole('button', { name: 'ทดสอบการเชื่อมต่อ' }));
-    expect(test).toHaveBeenLastCalledWith({});
+    expect(test).toHaveBeenLastCalledWith({ provider: 'openrouter' });
     await user.type(within(card).getByLabelText('API key ใหม่'), 'sk-candidate');
     await user.click(within(card).getByRole('button', { name: 'ทดสอบ key นี้' }));
-    expect(test).toHaveBeenLastCalledWith({ apiKey: 'sk-candidate' });
+    expect(test).toHaveBeenLastCalledWith({ provider: 'openrouter', apiKey: 'sk-candidate' });
 
     expect(await within(card).findByText(/Key ใช้ได้ \(sk-or-v1-abc\) · เหลือวงเงิน \$4\.50/)).toBeInTheDocument();
     expect(within(card).getByText(/ตอบกลับใน 812 ms/)).toBeInTheDocument();
@@ -225,6 +233,84 @@ describe('SettingsPage', () => {
 
     await user.click(within(example).getByRole('radio', { name: 'ตัวอย่าง' }));
     expect(example.querySelector('pre')!.textContent).toContain('"Sample story"');
+  });
+
+  it('switches the AI provider in one click and warns when it has no key', async () => {
+    update.mockImplementationOnce(async (patch) => ({
+      settings: { ...baseSettings(), provider: { value: patch.provider!, source: 'settings', envDefault: 'openrouter' } },
+      warnings: [{ code: 'providerNoKey', provider: 'anthropic' }],
+    }));
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ผู้ให้บริการ AI' });
+    const openrouter = within(card).getByRole('radio', { name: 'OpenRouter' });
+    const anthropic = within(card).getByRole('radio', { name: 'Anthropic' });
+    expect(openrouter).toHaveAttribute('aria-checked', 'true');
+    expect(within(openrouter).getByText('ใช้อยู่')).toBeInTheDocument();
+    expect(within(openrouter).getByText('มี key แล้ว')).toBeInTheDocument();
+    expect(within(anthropic).getByText('ยังไม่มี key')).toBeInTheDocument();
+    expect(within(anthropic).getByText('claude-haiku-4-5')).toBeInTheDocument();
+    const healthCallsBefore = shell.health.mock.calls.length;
+
+    await user.click(anthropic);
+
+    expect(update).toHaveBeenCalledWith({ provider: 'anthropic' });
+    await waitFor(() => expect(within(card).getByRole('radio', { name: 'Anthropic' })).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.getByText('ยังไม่มี API key ของ Anthropic — การเรียก AI จะล้มเหลวจนกว่าจะใส่ key')).toBeInTheDocument();
+    await waitFor(() => expect(shell.health.mock.calls.length).toBeGreaterThan(healthCallsBefore));
+    // the keys of the provider in use come first
+    const regions = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
+    expect(regions.indexOf('Anthropic API key')).toBeLessThan(regions.indexOf('OpenRouter API key'));
+  });
+
+  it('saves and tests the Anthropic key separately from OpenRouter', async () => {
+    const test = vi.spyOn(api, 'testAiConnection').mockResolvedValue({
+      ok: true,
+      provider: 'anthropic',
+      key: { ok: true, label: null, limitRemaining: null },
+      model: { ok: true, id: 'claude-haiku-4-5', latencyMs: 640, cost: 0.00002 },
+    });
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'Anthropic API key' });
+    const input = within(card).getByLabelText('API key ใหม่');
+    expect(input).toHaveAttribute('placeholder', 'sk-ant-api03-…');
+
+    await user.type(input, 'sk-ant-api03-candidate');
+    await user.click(within(card).getByRole('button', { name: 'ทดสอบ key นี้' }));
+    expect(test).toHaveBeenLastCalledWith({ provider: 'anthropic', apiKey: 'sk-ant-api03-candidate' });
+    expect(await within(card).findByText('Key ใช้ได้ (Anthropic ไม่มี API ให้ดูเครดิตคงเหลือ)')).toBeInTheDocument();
+
+    await user.click(within(card).getAllByRole('button', { name: 'บันทึก' })[0]);
+    expect(update).toHaveBeenCalledWith({ anthropic: { apiKey: 'sk-ant-api03-candidate' } });
+    expect(await within(card).findByText('sk-ant-api…k123')).toBeInTheDocument();
+  });
+
+  it('edits each provider’s model from its own tab', async () => {
+    const list = vi.mocked(api.listModels);
+    list.mockImplementation(async (provider) =>
+      provider === 'anthropic'
+        ? [
+            { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', contextLength: 200000, promptPrice: 1, completionPrice: 5, supportsJson: true },
+            { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', contextLength: null, promptPrice: 2, completionPrice: 10, supportsJson: true },
+          ]
+        : [],
+    );
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'โมเดล' });
+    expect(within(card).getByRole('radio', { name: 'OpenRouter' })).toHaveAttribute('aria-checked', 'true');
+    expect(list).toHaveBeenCalledWith('openrouter');
+
+    await user.click(within(card).getByRole('radio', { name: 'Anthropic' }));
+    expect(list).toHaveBeenLastCalledWith('anthropic');
+    // the alias resolves to its dated release for price info
+    expect(await within(card).findByText(/input \$1\.00 · output \$5\.00/)).toBeInTheDocument();
+    expect(within(card).getByText('ตอบเป็น JSON ตาม prompt')).toBeInTheDocument();
+
+    await pickModel(user, within(card).getByLabelText('Model ID'), 'claude-sonnet-5-5');
+    await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
+    expect(update).toHaveBeenCalledWith({ anthropic: { model: 'claude-sonnet-5-5' } });
   });
 
   it('shows save errors', async () => {

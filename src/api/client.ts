@@ -3,6 +3,7 @@ import type {
   AiSettings,
   AiSettingsPatch,
   ConnectionTestResult,
+  LlmProvider,
   MarketPreview,
   MarketRequest,
   MarketRun,
@@ -125,9 +126,10 @@ export const api = {
   updateAiSettings: (patch: AiSettingsPatch) =>
     request<{ settings: AiSettings; warnings: SettingsWarning[] }>('/settings/ai', { method: 'PUT', json: patch }),
   /** Check a key/model without saving (current settings are used for anything omitted). */
-  testAiConnection: (candidate: { apiKey?: string; model?: string } = {}) =>
+  testAiConnection: (candidate: { provider?: LlmProvider; apiKey?: string; model?: string } = {}) =>
     request<ConnectionTestResult>('/settings/ai/test', { method: 'POST', json: candidate }),
-  listModels: () => request<ModelInfo[]>('/settings/ai/models'),
+  /** Model list of a provider (default: the active one). */
+  listModels: (provider?: LlmProvider) => request<ModelInfo[]>(`/settings/ai/models${toQuery({ provider })}`),
   promptExamples: () => request<Record<PromptName, PromptExample>>('/settings/ai/examples'),
 
   marketPreview: (window: MarketWindow, sourceIds: number[]) =>

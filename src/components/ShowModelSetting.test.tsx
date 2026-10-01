@@ -70,6 +70,11 @@ describe('show model name setting', () => {
   it('settings switch saves immediately and refreshes the header', async () => {
     const shell = mockShellApi();
     const settings: AiSettings = {
+      provider: { value: 'openrouter', source: 'env', envDefault: 'openrouter' },
+      anthropic: {
+        apiKey: { configured: false, masked: null, source: 'none' },
+        model: { value: 'claude-haiku-4-5', source: 'env', envDefault: 'claude-haiku-4-5' },
+      },
       apiKey: { configured: true, masked: 'sk-or-v1-f…af96', source: 'env' },
       managementKey: { configured: false, masked: null, source: 'none' },
       model: { value: 'google/gemini-3.8-flash', source: 'env', envDefault: 'google/gemini-3.8-flash' },

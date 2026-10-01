@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChartColumn, ChevronRight, RefreshCw, Table2 } from 'lucide-react';
+import { ChartColumn, ChevronRight, CircleCheck, CircleX, ExternalLink, RefreshCw, Table2 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ANTHROPIC_BILLING_URL, PROVIDER_LABEL } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ import { DataTable } from '@/components/DataTable';
 import { Pagination, usePageSize } from '@/components/Pagination';
 import { PromptLogView } from '@/components/PromptLogView';
 import { useFetchStatus } from '@/context/FetchStatusContext';
+import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import type { MessageKey } from '@/i18n/messages';
 import { formatCredit, formatDateTime, formatNumber, hostname } from '@/utils/format';
@@ -141,6 +143,7 @@ export function AiUsagePage() {
 
 function AccountCard() {
   const { t } = useI18n();
+  const health = useHealth();
   const [account, setAccount] = useState<AiAccount | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,11 +166,13 @@ function AccountCard() {
 
   const key = account?.key;
   const credits = account?.credits;
+  const provider = account?.provider ?? health?.ai.provider ?? 'openrouter';
+  const title = t('ai.account', { provider: PROVIDER_LABEL[provider] });
 
   return (
-    <Card role="region" aria-label={t('ai.account')}>
+    <Card role="region" aria-label={title}>
       <CardHeader>
-        <CardTitle>{t('ai.account')}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardAction>
           <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading}>
             <RefreshCw className={cn(loading && 'animate-spin')} aria-hidden />
@@ -177,9 +182,36 @@ function AccountCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {error && <p className="text-sm text-danger">{error}</p>}
-        {account && !account.enabled && <p className="text-sm text-muted-foreground">{t('ai.noKey')}</p>}
+        {account && !account.enabled && (
+          <p className="text-sm text-muted-foreground">{t('ai.noKey', { provider: PROVIDER_LABEL[provider] })}</p>
+        )}
 
-        {account?.enabled && (
+        {/* Anthropic has no balance API: show the key status and where to see the credit instead. */}
+        {account?.enabled && provider === 'anthropic' && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <Metric label={t('ai.anthropic.keyStatus')}>
+              <div
+                className={cn('flex items-center gap-2 text-2xl font-bold', account.verified ? 'text-success' : 'text-danger')}
+                data-testid="anthropic-key"
+              >
+                {account.verified ? <CircleCheck className="size-5" aria-hidden /> : <CircleX className="size-5" aria-hidden />}
+                {account.verified ? t('ai.anthropic.keyOk') : t('ai.anthropic.keyBad')}
+              </div>
+              <div className="text-xs text-muted-foreground">{t('ai.anthropic.costNote')}</div>
+            </Metric>
+            <Metric label={t('ai.creditsRemaining')}>
+              <p className="text-sm">{t('ai.anthropic.noBalance')}</p>
+              <Button asChild variant="outline" size="sm" className="mt-1 self-start">
+                <a href={ANTHROPIC_BILLING_URL} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden />
+                  {t('ai.anthropic.openBilling')}
+                </a>
+              </Button>
+            </Metric>
+          </div>
+        )}
+
+        {account?.enabled && provider !== 'anthropic' && (
           <div className="grid gap-3 md:grid-cols-3">
             <Metric label={t('ai.creditsRemaining')}>
               <div className="text-2xl font-bold tabular-nums" data-testid="credits-remaining">

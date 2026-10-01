@@ -2,6 +2,7 @@ import { Sparkles } from 'lucide-react';
 import { Suspense, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PROVIDER_LABEL } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -106,7 +107,9 @@ export function Layout() {
                     {aiText}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>{health.ai.enabled ? t('ai.onTitle') : t('ai.offTitle')}</TooltipContent>
+                <TooltipContent>
+                  {t(health.ai.enabled ? 'ai.onTitle' : 'ai.offTitle', { provider: PROVIDER_LABEL[health.ai.provider ?? 'openrouter'] })}
+                </TooltipContent>
               </Tooltip>
             )}
             <FetchNowButton />
