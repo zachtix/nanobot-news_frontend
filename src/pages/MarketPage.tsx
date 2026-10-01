@@ -37,7 +37,8 @@ const DEFAULT_SETUP: Setup = { window: '1d', sourceIds: [], refresh: true, analy
 function loadSetup(): Setup {
   try {
     const saved = JSON.parse(localStorage.getItem(SETUP_KEY) ?? 'null') as Partial<Setup> | null;
-    return saved ? { ...DEFAULT_SETUP, ...saved, window: saved.window === '7d' ? '7d' : '1d' } : DEFAULT_SETUP;
+    // A setup saved when 7 days was still offered falls back to the only window left.
+    return saved ? { ...DEFAULT_SETUP, ...saved, window: '1d' } : DEFAULT_SETUP;
   } catch {
     return DEFAULT_SETUP;
   }
@@ -154,22 +155,10 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
         <CardTitle>{t('market.setup')}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <Label>{t('market.period')}</Label>
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            value={setup.window}
-            onValueChange={(v) => v && update({ window: v as MarketWindow })}
-            aria-label={t('market.period')}
-            className="justify-start"
-          >
-            {(['1d', '7d'] as const).map((w) => (
-              <ToggleGroupItem key={w} value={w} className="px-4">
-                {t(`market.window.${w}`)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <p className="text-sm">{t('market.periodFixed')}</p>
+          <p className="text-xs text-muted-foreground">{t('market.periodFixedHelp')}</p>
         </div>
 
         <div className="flex flex-col gap-2">

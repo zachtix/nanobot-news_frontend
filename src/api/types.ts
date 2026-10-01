@@ -345,7 +345,8 @@ export type PromptName = 'dedup' | 'translate' | 'tag' | 'analyze' | 'market';
 
 // ---------------------------------------------------------------- market analysis
 
-export type MarketWindow = '1d' | '7d';
+/** Only the latest 24 hours. */
+export type MarketWindow = '1d';
 export type Sentiment = 'bullish' | 'bearish' | 'neutral' | 'mixed';
 export type MarketStatus = 'running' | 'success' | 'failed';
 export type MarketStage = 'refresh' | 'stories' | 'market';

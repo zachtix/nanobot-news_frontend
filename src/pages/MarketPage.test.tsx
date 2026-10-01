@@ -153,10 +153,11 @@ describe('MarketPage', () => {
     // a source with automatic fetch turned off is offered like any other
     expect(within(setup).getByRole('button', { name: 'Disabled' })).toBeInTheDocument();
 
-    await user.click(within(setup).getByRole('radio', { name: '7 วัน' }));
-    await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('7d', []));
+    expect(within(setup).getByText('24 ชั่วโมงล่าสุด')).toBeInTheDocument();
+    expect(within(setup).queryByRole('radio', { name: '7 วัน' })).not.toBeInTheDocument();
+    await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('1d', []));
     await user.click(within(setup).getByRole('button', { name: 'Decrypt' }));
-    await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('7d', [2]));
+    await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith('1d', [2]));
     await user.click(within(setup).getByRole('checkbox', { name: 'วิเคราะห์รายข่าวที่ยังไม่มีบทวิเคราะห์ก่อน' }));
     expect(within(setup).getByText('ค่าใช้จ่ายโดยประมาณ $0.208')).toBeInTheDocument();
 
@@ -166,7 +167,7 @@ describe('MarketPage', () => {
       .mockResolvedValue(detail({ id: 5, newlyAnalyzed: 73, costStories: 0.19, cost: 0.21 }));
     await user.click(within(setup).getByRole('button', { name: 'วิเคราะห์ภาพรวม' }));
 
-    expect(start).toHaveBeenCalledWith({ window: '7d', sourceIds: [2], refresh: true, analyzeMissing: true });
+    expect(start).toHaveBeenCalledWith({ window: '1d', sourceIds: [2], refresh: true, analyzeMissing: true });
     const running = await screen.findByRole('region', { name: 'ผลวิเคราะห์ #5' });
     const steps = within(running).getByRole('list', { name: 'กำลังวิเคราะห์…' });
     expect(within(steps).getByText('วิเคราะห์รายข่าว').closest('li')).toHaveAttribute('aria-current', 'step');
@@ -174,7 +175,7 @@ describe('MarketPage', () => {
     expect(await screen.findByText('Bitcoin ติดแนวต้าน $85,000', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(screen.getByText(/วิเคราะห์รายข่าวเพิ่ม 73 ข่าว/)).toBeInTheDocument();
     // The run's own setup is remembered for next time.
-    expect(JSON.parse(localStorage.getItem('market:setup')!)).toMatchObject({ window: '7d', sourceIds: [2], analyzeMissing: true });
+    expect(JSON.parse(localStorage.getItem('market:setup')!)).toMatchObject({ window: '1d', sourceIds: [2], analyzeMissing: true });
   });
 
   it('tells when the same data was analysed before and when a result was reused', async () => {
