@@ -349,7 +349,7 @@ export type PromptName = 'dedup' | 'translate' | 'tag' | 'analyze' | 'market';
 export type MarketWindow = '1d';
 export type Sentiment = 'bullish' | 'bearish' | 'neutral' | 'mixed';
 export type MarketStatus = 'running' | 'success' | 'failed';
-export type MarketStage = 'refresh' | 'stories' | 'market';
+export type MarketStage = 'refresh' | 'content' | 'stories' | 'market';
 
 export interface MarketAsset extends Omit<AnalysisAsset, 'id'> {
   /** News ids driving this call, most important first. */
@@ -430,6 +430,8 @@ export interface MarketPreview {
   analyzedCount: number;
   missingCount: number;
   truncatedCount: number;
+  /** Stories whose full article text is not stored yet (fetched before the brief). */
+  contentMissingCount: number;
   staleSources: string[];
   estimate: { market: number; stories: number };
   cached: { id: number; createdAt: string } | null;

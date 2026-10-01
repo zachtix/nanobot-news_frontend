@@ -231,6 +231,9 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
                 {t('market.preview', { n: preview.storyCount, analyzed: preview.analyzedCount, missing: preview.missingCount })}
               </span>
               <span className="text-xs text-muted-foreground">{t('market.previewHelp')}</span>
+              {preview.contentMissingCount > 0 && (
+                <span className="text-xs text-muted-foreground">{t('market.contentMissing', { n: preview.contentMissingCount })}</span>
+              )}
               {preview.truncatedCount > 0 && <span className="text-xs text-warning">{t('market.truncated', { n: preview.truncatedCount })}</span>}
               {preview.storyCount === 0 && <span className="text-xs text-muted-foreground">{t('market.noStories')}</span>}
               <span className="tabular-nums">{t('market.estimate', { cost: formatCredit(estimate) })}</span>

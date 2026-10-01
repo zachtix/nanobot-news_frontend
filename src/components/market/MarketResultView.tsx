@@ -18,7 +18,7 @@ const SENTIMENT: Record<Sentiment, { variant: 'success' | 'danger' | 'secondary'
   mixed: { variant: 'warning', Icon: Waves },
 };
 
-const STAGES: MarketStage[] = ['refresh', 'stories', 'market'];
+const STAGES: MarketStage[] = ['refresh', 'content', 'stories', 'market'];
 
 /** Which steps this run includes, and where it is now. */
 function StageSteps({ run }: { run: MarketRunDetail }) {

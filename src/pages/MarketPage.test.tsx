@@ -12,6 +12,7 @@ const preview = (overrides: Partial<MarketPreview> = {}): MarketPreview => ({
   analyzedCount: 8,
   missingCount: 73,
   truncatedCount: 0,
+  contentMissingCount: 12,
   staleSources: ['CoinDesk'],
   estimate: { market: 0.018, stories: 0.19 },
   cached: null,
@@ -150,6 +151,7 @@ describe('MarketPage', () => {
     expect(within(setup).getByText(/จะดึงใหม่: CoinDesk/)).toBeInTheDocument();
     expect(within(setup).getByText(/73 ข่าว · ประมาณ \$0\.19/)).toBeInTheDocument();
     expect(within(setup).getByText('ค่าใช้จ่ายโดยประมาณ $0.018')).toBeInTheDocument();
+    expect(within(setup).getByText(/ยังไม่มีเนื้อหาเต็ม 12 ข่าว/)).toBeInTheDocument();
     // a source with automatic fetch turned off is offered like any other
     expect(within(setup).getByRole('button', { name: 'Disabled' })).toBeInTheDocument();
 
@@ -171,6 +173,8 @@ describe('MarketPage', () => {
     const running = await screen.findByRole('region', { name: 'ผลวิเคราะห์ #5' });
     const steps = within(running).getByRole('list', { name: 'กำลังวิเคราะห์…' });
     expect(within(steps).getByText('วิเคราะห์รายข่าว').closest('li')).toHaveAttribute('aria-current', 'step');
+    // full article text was fetched before the per-story step
+    expect(within(steps).getByText('ดึงเนื้อหาข่าวเต็ม').closest('li')).not.toHaveAttribute('aria-current');
 
     expect(await screen.findByText('Bitcoin ติดแนวต้าน $85,000', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(screen.getByText(/วิเคราะห์รายข่าวเพิ่ม 73 ข่าว/)).toBeInTheDocument();
