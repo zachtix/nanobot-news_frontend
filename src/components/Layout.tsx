@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
-import { type Lang, LANGS, type MessageKey } from '@/i18n/messages';
+import type { MessageKey } from '@/i18n/messages';
 import { FetchNowButton } from './FetchNowButton';
+import { LanguageMenu } from './LanguageMenu';
 import { ThemeToggle } from './ThemeToggle';
 
 const NAV: { to: string; label: MessageKey; end?: boolean }[] = [
@@ -29,7 +29,7 @@ const NAV: { to: string; label: MessageKey; end?: boolean }[] = [
 
 export function Layout() {
   const { completedRun, error, clearError } = useFetchStatus();
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const health = useHealth();
 
   useEffect(() => {
@@ -85,20 +85,7 @@ export function Layout() {
             ))}
           </nav>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              value={lang}
-              onValueChange={(v) => v && setLang(v as Lang)}
-              aria-label={t('lang.label')}
-            >
-              {LANGS.map((l) => (
-                <ToggleGroupItem key={l} value={l} aria-label={l.toUpperCase()} className="px-2.5 text-xs font-semibold">
-                  {l.toUpperCase()}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            <LanguageMenu />
             <ThemeToggle />
             {aiText && health && (
               <Tooltip>

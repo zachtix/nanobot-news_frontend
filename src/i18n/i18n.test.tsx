@@ -35,13 +35,13 @@ describe('language switch', () => {
 
     expect(await screen.findByRole('link', { name: 'แหล่งข่าว' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ดึงข่าวตอนนี้' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'TH' })).toHaveAttribute('aria-checked', 'true');
-
-    await user.click(screen.getByRole('radio', { name: 'EN' }));
+    await user.click(screen.getByRole('button', { name: 'ภาษา: ไทย' }));
+    expect(await screen.findByRole('menuitemradio', { name: /ไทย/ })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('menuitemradio', { name: /English/ }));
 
     expect(screen.getByRole('link', { name: 'Sources' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fetch now' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'EN' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Language: English' })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
     expect(localStorage.getItem('lang')).toBe('en');
   });
