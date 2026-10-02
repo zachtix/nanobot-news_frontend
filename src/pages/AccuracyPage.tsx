@@ -157,7 +157,7 @@ function FeedbackCard({ summary }: { summary: OutcomeSummary }) {
 
 /** Groups with fewer judged calls than this are folded away by default (too few to read anything into). */
 const SMALL_GROUP = 5;
-type GroupTab = 'event' | 'confidence' | 'direction' | 'asset';
+type GroupTab = 'event' | 'confidence' | 'direction' | 'asset' | 'chart';
 
 /** One grouping at a time (tabs), each row with a bar of its hit rate against the overall rate. */
 function GroupsCard({ summary }: { summary: OutcomeSummary }) {
@@ -165,11 +165,20 @@ function GroupsCard({ summary }: { summary: OutcomeSummary }) {
   const [tab, setTab] = useState<GroupTab>('event');
   const [showSmall, setShowSmall] = useState(false);
   const overall = summary.horizons[summary.mainHorizon].hitRate;
-  const tabs: { id: GroupTab; title: MessageKey; rows: OutcomeGroup[]; label: (key: string) => string }[] = [
+  const tabs: { id: GroupTab; title: MessageKey; rows: OutcomeGroup[]; label: (key: string) => string; note?: string; toAi?: boolean }[] = [
     { id: 'event', title: 'acc.by.eventType', rows: summary.byEventType, label: (k) => t(`event.${k}` as MessageKey) },
     { id: 'confidence', title: 'acc.by.confidence', rows: summary.byConfidence, label: (k) => `${k}%` },
     { id: 'direction', title: 'acc.by.direction', rows: summary.byDirection, label: (k) => t(`analysis.dir.${k}` as MessageKey) },
     { id: 'asset', title: 'acc.by.asset', rows: summary.byAsset, label: (k) => k },
+    {
+      id: 'chart',
+      title: 'acc.by.chart',
+      rows: summary.byChartSetup,
+      label: (k) => t(`chart.setup.${k}` as MessageKey),
+      note: `${t('acc.chartNote')}${summary.chart ? '' : ` ${t('acc.chartOff')}`}`,
+      // The AI gets these groups only when it also sees the chart of the story.
+      toAi: summary.chart,
+    },
   ];
 
   return (
@@ -201,6 +210,7 @@ function GroupsCard({ summary }: { summary: OutcomeSummary }) {
             const shown = showSmall ? g.rows : big;
             return (
               <TabsContent key={g.id} value={g.id} className="flex flex-col gap-3 pt-3">
+                {g.note && <p className="text-sm text-muted-foreground">{g.note}</p>}
                 {g.rows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t('acc.noGroups')}</p>
                 ) : (
@@ -224,13 +234,13 @@ function GroupsCard({ summary }: { summary: OutcomeSummary }) {
                       </TableHeader>
                       <TableBody>
                         {shown.map((r) => (
-                          <GroupRow key={r.key} row={r} label={g.label(r.key)} overall={overall} sentToAi={r.reliable && summary.feedback} />
+                          <GroupRow key={r.key} row={r} label={g.label(r.key)} overall={overall} sentToAi={r.reliable && summary.feedback && g.toAi !== false} />
                         ))}
                       </TableBody>
                     </Table>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
-                        {summary.feedback && (
+                        {summary.feedback && g.toAi !== false && (
                           <>
                             <Sparkles className="size-3.5 text-primary" aria-hidden />
                             {t('acc.sentToAiLegend', { n: summary.minSamples })}

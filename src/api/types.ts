@@ -208,6 +208,8 @@ export interface FetchRun {
   errors: number;
   tagged: number;
   translated: number;
+  /** New stories analysed right after the fetch. */
+  analyzed: number;
   aiCalls: number;
   promptTokens: number;
   completionTokens: number;
@@ -334,6 +336,10 @@ export interface FetchStatus {
 export interface SchedulerStatus {
   enabled: boolean;
   cron: string;
+  /** Translate new stories right after each fetch. */
+  autoTranslate: boolean;
+  /** Analyse new stories with the AI right after each fetch. */
+  autoAnalyze: boolean;
   timezone: string;
   nextRunAt: string | null;
   running: boolean;
@@ -497,6 +503,8 @@ export interface AiSettings {
   display: { showModel: boolean };
   /** Learning from outcomes. */
   learning: LearningSwitches;
+  /** Chart data (RSI, MACD, EMAs, divergences) sent with each analysis. */
+  chart: { enabled: boolean };
 }
 
 export interface LearningSwitches {
@@ -516,6 +524,7 @@ export interface AiSettingsPatch {
   prompts?: Partial<Record<PromptName, string | null>>;
   showModel?: boolean;
   learning?: Partial<LearningSwitches>;
+  chart?: { enabled?: boolean };
 }
 
 export type SettingsWarning =
@@ -570,6 +579,10 @@ export interface OutcomeSummary {
   byConfidence: OutcomeGroup[];
   byDirection: OutcomeGroup[];
   byAsset: OutcomeGroup[];
+  /** By the 4h chart setup when the call was made (a call can be in several groups). */
+  byChartSetup: OutcomeGroup[];
+  /** Chart switch: the chart-setup groups go to the AI only when it is on. */
+  chart: boolean;
   /** What the AI is given right now; null when switched off or not enough data. */
   feedbackText: string | null;
 }
@@ -591,4 +604,20 @@ export interface PredictionView {
   error: string | null;
   moves: Record<Horizon, number | null>;
   verdicts: Record<Horizon, 'hit' | 'miss' | null>;
+  /** 4h chart setup at the base time (null: not looked up yet). */
+  setups: ChartSetup[] | null;
 }
+
+export const CHART_SETUPS = [
+  'rsi_oversold',
+  'rsi_overbought',
+  'rsi_cross_up_30',
+  'rsi_cross_down_70',
+  'bullish_divergence',
+  'bearish_divergence',
+  'macd_cross_up',
+  'macd_cross_down',
+  'above_ema200',
+  'below_ema200',
+] as const;
+export type ChartSetup = (typeof CHART_SETUPS)[number];

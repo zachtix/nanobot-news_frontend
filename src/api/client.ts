@@ -147,6 +147,6 @@ export const api = {
   marketRun: (id: number) => request<MarketRunDetail>(`/market/analyses/${id}`),
 
   getScheduler: () => request<SchedulerStatus>('/scheduler'),
-  updateScheduler: (patch: { enabled?: boolean; cron?: string }) =>
+  updateScheduler: (patch: Partial<Pick<SchedulerStatus, 'enabled' | 'cron' | 'autoTranslate' | 'autoAnalyze'>>) =>
     request<SchedulerStatus>('/scheduler', { method: 'PUT', json: patch }),
 };

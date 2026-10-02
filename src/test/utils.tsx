@@ -89,6 +89,7 @@ export function makeRun(overrides: Partial<FetchRun> = {}): FetchRun {
     errors: 0,
     tagged: 0,
     translated: 0,
+    analyzed: 0,
     aiCalls: 0,
     promptTokens: 0,
     completionTokens: 0,

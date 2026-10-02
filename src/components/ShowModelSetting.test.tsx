@@ -87,6 +87,7 @@ describe('show model name setting', () => {
       },
       display: { showModel: true },
       learning: { tracking: true, feedback: true },
+      chart: { enabled: false },
     };
     vi.spyOn(api, 'getAiSettings').mockResolvedValue(settings);
     vi.spyOn(api, 'listModels').mockResolvedValue([]);

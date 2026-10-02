@@ -26,6 +26,7 @@ const baseSettings = (): AiSettings => ({
   },
   display: { showModel: true },
   learning: { tracking: true, feedback: true },
+  chart: { enabled: false },
 });
 
 /** The model field is a searchable combobox: pick a listed model, or an unlisted id offered as a custom value. */
@@ -42,6 +43,8 @@ const scheduler: SchedulerStatus = {
   timezone: 'Asia/Bangkok',
   nextRunAt: '2026-10-01T05:30:00.000Z',
   running: false,
+  autoTranslate: false,
+  autoAnalyze: false,
 };
 
 describe('SettingsPage', () => {
@@ -77,6 +80,7 @@ describe('SettingsPage', () => {
       if (patch.model) s.model = { ...s.model, value: patch.model, source: 'settings' };
       if (patch.showModel !== undefined) s.display = { showModel: patch.showModel };
       if (patch.learning) s.learning = { ...s.learning, ...patch.learning };
+      if (patch.chart) s.chart = { enabled: patch.chart.enabled ?? false };
       if (patch.provider) s.provider = { ...s.provider, value: patch.provider, source: 'settings' };
       if (patch.anthropic?.apiKey) s.anthropic.apiKey = { configured: true, masked: 'sk-ant-api…k123', source: 'settings' };
       if (patch.anthropic?.model) s.anthropic.model = { ...s.anthropic.model, value: patch.anthropic.model, source: 'settings' };
@@ -371,9 +375,40 @@ describe('SettingsPage', () => {
     await user.click(within(card).getByRole('switch', { name: 'เปิดการดึงอัตโนมัติ' }));
     await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
 
-    expect(update).toHaveBeenCalledWith({ enabled: false, cron: '0 */3 * * *' });
-    expect(await within(card).findByText('บันทึกการตั้งเวลาแล้ว')).toBeInTheDocument();
+    expect(update).toHaveBeenCalledWith({ enabled: false, cron: '0 */3 * * *', autoTranslate: false, autoAnalyze: false });
+    expect(await within(card).findByText('บันทึกการตั้งค่าการดึงข่าวแล้ว')).toBeInTheDocument();
     expect(within(card).getByText('ปัจจุบัน: ปิดการดึงอัตโนมัติ')).toBeInTheDocument();
+  });
+
+  it('turns on translating and analysing right after each fetch (both off by default)', async () => {
+    const update = vi.spyOn(api, 'updateScheduler').mockResolvedValue({ ...scheduler, autoTranslate: true, autoAnalyze: true });
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ตั้งเวลาดึงข่าว' });
+    const after = within(card).getByRole('group', { name: 'หลังดึงข่าวเสร็จ' });
+    const translate = within(after).getByRole('switch', { name: 'แปลทันที' });
+    const analyse = within(after).getByRole('switch', { name: 'วิเคราะห์ทันที' });
+    expect(translate).toHaveAttribute('aria-checked', 'false');
+    expect(analyse).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(translate);
+    await user.click(analyse);
+    await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
+
+    expect(update).toHaveBeenCalledWith({ enabled: true, cron: '*/30 * * * *', autoTranslate: true, autoAnalyze: true });
+    expect(await within(card).findByText('บันทึกการตั้งค่าการดึงข่าวแล้ว')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'บันทึก' })).toBeDisabled();
+  });
+
+  it('switches chart data for the AI on (off by default)', async () => {
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ข้อมูลกราฟ' });
+    const toggle = within(card).getByRole('switch', { name: 'ส่งข้อมูลกราฟให้ AI' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await user.click(toggle);
+    expect(update).toHaveBeenCalledWith({ chart: { enabled: true } });
+    await waitFor(() => expect(within(card).getByRole('switch', { name: 'ส่งข้อมูลกราฟให้ AI' })).toHaveAttribute('aria-checked', 'true'));
   });
 
   it('shows validation errors for a bad cron', async () => {

@@ -87,6 +87,7 @@ export function RunHistory() {
       num('errors', t('runs.col.errors')),
       num('tagged', t('runs.col.tagged')),
       num('translated', t('runs.col.translated')),
+      num('analyzed', t('runs.col.analyzed')),
       num('aiCalls', t('runs.col.aiCalls')),
       {
         id: 'tokens',
