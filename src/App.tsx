@@ -8,7 +8,6 @@ import { NewsPage } from './pages/NewsPage';
 
 // The news page ships in the main bundle; the rest load on first visit (charts, combobox…).
 const SourcesPage = lazy(() => import('./pages/SourcesPage').then((m) => ({ default: m.SourcesPage })));
-const FetchPage = lazy(() => import('./pages/FetchPage').then((m) => ({ default: m.FetchPage })));
 const AiUsagePage = lazy(() => import('./pages/AiUsagePage').then((m) => ({ default: m.AiUsagePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const MarketPage = lazy(() => import('./pages/MarketPage').then((m) => ({ default: m.MarketPage })));
@@ -24,7 +23,8 @@ export function App() {
               <Route index element={<NewsPage />} />
               <Route path="market" element={<MarketPage />} />
               <Route path="sources" element={<SourcesPage />} />
-              <Route path="fetch" element={<FetchPage />} />
+              {/* Run history now lives on Sources and the schedule in Settings; keep old links working. */}
+              <Route path="fetch" element={<Navigate to="/sources" replace />} />
               <Route path="ai-usage" element={<AiUsagePage />} />
               <Route path="accuracy" element={<AccuracyPage />} />
               <Route path="settings" element={<SettingsPage />} />

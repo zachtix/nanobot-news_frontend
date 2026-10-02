@@ -21,7 +21,6 @@ const NAV: { to: string; label: MessageKey; end?: boolean }[] = [
   { to: '/', label: 'nav.news', end: true },
   { to: '/market', label: 'nav.market' },
   { to: '/sources', label: 'nav.sources' },
-  { to: '/fetch', label: 'nav.fetch' },
   { to: '/ai-usage', label: 'nav.aiUsage' },
   { to: '/accuracy', label: 'nav.accuracy' },
   { to: '/settings', label: 'nav.settings' },

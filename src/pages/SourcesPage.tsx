@@ -12,6 +12,7 @@ import type { Source } from '@/api/types';
 import { SourceTypeBadge } from '@/components/Badges';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
+import { RunHistory } from '@/components/fetch/RunHistory';
 import { SourceForm } from '@/components/SourceForm';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useI18n } from '@/i18n/I18nContext';
@@ -208,6 +209,8 @@ export function SourcesPage() {
           paginate
         />
       )}
+
+      <RunHistory />
     </div>
   );
 }

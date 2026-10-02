@@ -31,6 +31,7 @@ import type {
   SettingsWarning,
 } from '@/api/types';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { SchedulerCard } from '@/components/fetch/SchedulerCard';
 import { PromptUserExample } from '@/components/PromptUserExample';
 import { useRefreshHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
@@ -91,6 +92,7 @@ export function SettingsPage() {
         </Alert>
       )}
 
+      <SchedulerCard />
       <ProviderCard settings={settings} save={save} />
       {settings.provider.value === 'anthropic' ? (
         <>

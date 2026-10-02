@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
-import type { AiSettings } from '../api/types';
+import type { AiSettings, SchedulerStatus } from '../api/types';
 import { mockShellApi, renderPage } from '../test/utils';
 import { SettingsPage } from './SettingsPage';
 
@@ -36,12 +36,21 @@ async function pickModel(user: UserEvent, trigger: HTMLElement, model: string) {
   await user.click(listed ?? (await screen.findByRole('option', { name: `ใช้ "${model}"` })));
 }
 
+const scheduler: SchedulerStatus = {
+  enabled: true,
+  cron: '*/30 * * * *',
+  timezone: 'Asia/Bangkok',
+  nextRunAt: '2026-10-01T05:30:00.000Z',
+  running: false,
+};
+
 describe('SettingsPage', () => {
   let update: MockInstance<typeof api.updateAiSettings>;
   let shell: ReturnType<typeof mockShellApi>;
 
   beforeEach(() => {
     shell = mockShellApi();
+    vi.spyOn(api, 'getScheduler').mockResolvedValue(scheduler);
     vi.spyOn(api, 'getAiSettings').mockResolvedValue(baseSettings());
     vi.spyOn(api, 'listModels').mockResolvedValue([
       { id: 'google/gemini-3.8-flash', name: 'Google: Gemini 3.8 Flash', contextLength: 1048576, promptPrice: 0.75, completionPrice: 3.75, supportsJson: true },
@@ -338,5 +347,45 @@ describe('SettingsPage', () => {
     await pickModel(user, within(card).getByLabelText('Model ID'), 'bad id');
     await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
     expect(await within(card).findByRole('alert')).toHaveTextContent('Validation failed (model: Model id may only contain letters)');
+  });
+
+  it('shows the current fetch schedule', async () => {
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ตั้งเวลาดึงข่าว' });
+    expect(within(card).getByLabelText('Cron expression')).toHaveValue('*/30 * * * *');
+    const presets = within(card).getByRole('radiogroup', { name: 'ความถี่' });
+    expect(within(presets).getByRole('radio', { name: 'ทุก 30 นาที' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(card).getByText(/ปัจจุบัน: ทุก 30 นาที · รอบถัดไป/)).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'บันทึก' })).toBeDisabled(); // nothing changed yet
+  });
+
+  it('saves a fetch schedule preset and the enabled flag', async () => {
+    const update = vi
+      .spyOn(api, 'updateScheduler')
+      .mockResolvedValue({ ...scheduler, cron: '0 */3 * * *', enabled: false, nextRunAt: null });
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ตั้งเวลาดึงข่าว' });
+
+    await user.click(within(card).getByRole('radio', { name: 'ทุก 3 ชั่วโมง' }));
+    await user.click(within(card).getByRole('switch', { name: 'เปิดการดึงอัตโนมัติ' }));
+    await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
+
+    expect(update).toHaveBeenCalledWith({ enabled: false, cron: '0 */3 * * *' });
+    expect(await within(card).findByText('บันทึกการตั้งเวลาแล้ว')).toBeInTheDocument();
+    expect(within(card).getByText('ปัจจุบัน: ปิดการดึงอัตโนมัติ')).toBeInTheDocument();
+  });
+
+  it('shows validation errors for a bad cron', async () => {
+    vi.spyOn(api, 'updateScheduler').mockRejectedValue(new ApiError(400, 'Invalid cron expression: "nope"'));
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'ตั้งเวลาดึงข่าว' });
+
+    const input = within(card).getByLabelText('Cron expression');
+    await user.clear(input);
+    await user.type(input, 'nope');
+    await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
+    expect(await within(card).findByRole('alert')).toHaveTextContent('Invalid cron expression');
   });
 });

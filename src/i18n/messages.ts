@@ -5,7 +5,6 @@ const th = {
   // shell
   'nav.news': 'ข่าว',
   'nav.sources': 'แหล่งข่าว',
-  'nav.fetch': 'การดึงข่าว',
   'nav.market': 'วิเคราะห์ตลาด',
   'nav.aiUsage': 'การใช้ AI',
   'nav.accuracy': 'ความแม่นของ AI',
@@ -157,7 +156,7 @@ const th = {
 
   // sources
   'sources.title': 'แหล่งข่าว',
-  'sources.subtitle': 'เพิ่มเว็บข่าวที่ต้องการ ระบบจะดึงตามเวลาที่ตั้งไว้ หรือกดดึงทันทีได้',
+  'sources.subtitle': 'เพิ่มเว็บข่าวที่ต้องการ ระบบจะดึงตามเวลาที่ตั้งไว้ (ตั้งได้ในหน้าตั้งค่า) หรือกดดึงทันทีได้ — ประวัติการดึงแต่ละรอบอยู่ด้านล่าง',
   'sources.add': 'เพิ่มแหล่งข่าว',
   'sources.empty': 'ยังไม่มีแหล่งข่าว',
   'sources.emptyHint': 'กด “เพิ่มแหล่งข่าว” แล้ววางลิงก์เว็บข่าวคริปโตที่ต้องการ',
@@ -206,8 +205,6 @@ const th = {
   'form.save': 'บันทึกแหล่งข่าว',
 
   // fetch page
-  'fetchPage.title': 'การดึงข่าว',
-  'fetchPage.subtitle': 'ตั้งเวลาให้ระบบดึงข่าวอัตโนมัติ และดูประวัติการดึงแต่ละครั้ง',
   'sched.label': 'ตั้งเวลาดึงข่าว',
   'sched.title': 'ตั้งเวลาดึงข่าวอัตโนมัติ',
   'sched.on': 'เปิด',
@@ -347,8 +344,8 @@ const th = {
 
   // settings
   'nav.settings': 'ตั้งค่า',
-  'settings.title': 'ตั้งค่า AI',
-  'settings.subtitle': 'ผู้ให้บริการ AI, API key, โมเดล และ system prompt — บันทึกแล้วมีผลทันที ไม่ต้อง restart',
+  'settings.title': 'ตั้งค่า',
+  'settings.subtitle': 'ตั้งเวลาดึงข่าว, ผู้ให้บริการ AI, API key, โมเดล และ system prompt — บันทึกแล้วมีผลทันที ไม่ต้อง restart',
   'settings.providerTitle': 'ผู้ให้บริการ AI',
   'settings.providerHelp': 'ทุกงาน AI (ตรวจข่าวซ้ำ แปลภาษา ติดแท็ก วิเคราะห์) จะเรียกผ่านเจ้าที่เลือก · แต่ละเจ้าเก็บ key และโมเดลแยกกัน สลับไปมาได้โดยค่าไม่หาย',
   'settings.provider.openrouter': 'โมเดลจากหลายเจ้าด้วย key เดียว · ดูเครดิตคงเหลือได้ในหน้า "การใช้ AI"',
@@ -616,7 +613,6 @@ export type MessageKey = keyof typeof th;
 const en: Record<MessageKey, string> = {
   'nav.news': 'News',
   'nav.sources': 'Sources',
-  'nav.fetch': 'Fetching',
   'nav.market': 'Market',
   'nav.aiUsage': 'AI usage',
   'nav.accuracy': 'AI accuracy',
@@ -763,7 +759,7 @@ const en: Record<MessageKey, string> = {
   'page.of': 'Page {page} / {pages}',
 
   'sources.title': 'Sources',
-  'sources.subtitle': 'Add the news sites you want. They are fetched on schedule, or right away on demand.',
+  'sources.subtitle': 'Add the news sites you want. They are fetched on schedule (set it in Settings), or right away on demand — every run is listed below.',
   'sources.add': 'Add source',
   'sources.empty': 'No sources yet',
   'sources.emptyHint': 'Click “Add source” and paste the link of a crypto news site',
@@ -810,8 +806,6 @@ const en: Record<MessageKey, string> = {
   'form.previewEmpty': 'Nothing found — try setting CSS selectors in Advanced settings',
   'form.save': 'Save source',
 
-  'fetchPage.title': 'Fetching',
-  'fetchPage.subtitle': 'Schedule automatic fetching and review every run.',
   'sched.label': 'Fetch schedule',
   'sched.title': 'Automatic fetching',
   'sched.on': 'On',
@@ -947,8 +941,8 @@ const en: Record<MessageKey, string> = {
   'ai.purpose.market': 'Market analysis',
 
   'nav.settings': 'Settings',
-  'settings.title': 'AI settings',
-  'settings.subtitle': 'AI provider, API keys, model and system prompts — changes apply immediately, no restart needed',
+  'settings.title': 'Settings',
+  'settings.subtitle': 'Fetch schedule, AI provider, API keys, model and system prompts — changes apply immediately, no restart needed',
   'settings.providerTitle': 'AI provider',
   'settings.providerHelp': 'Every AI task (dedup, translation, tagging, analysis) goes through the selected provider · each keeps its own key and model, so switching back and forth loses nothing',
   'settings.provider.openrouter': 'Models from many vendors with one key · remaining credit shown on "AI usage"',
