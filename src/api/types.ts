@@ -119,6 +119,23 @@ export interface AnalysisAsset {
   rationaleEn: string;
 }
 
+/** Kind of event a story is about (picked by the AI; used to compare outcomes of similar events). */
+export type EventType =
+  | 'hack_exploit'
+  | 'etf_fund_flows'
+  | 'regulation_legal'
+  | 'listing_delisting'
+  | 'token_unlock_supply'
+  | 'institutional_treasury'
+  | 'partnership_adoption'
+  | 'product_upgrade'
+  | 'exchange_business'
+  | 'stablecoin'
+  | 'macro_economy'
+  | 'mining_infrastructure'
+  | 'market_commentary'
+  | 'other';
+
 export interface NewsAnalysis {
   id: number;
   newsId: number;
@@ -127,6 +144,8 @@ export interface NewsAnalysis {
   summaryEn: string;
   impact: 'low' | 'medium' | 'high';
   timeHorizon: 'short' | 'medium' | 'long';
+  /** Null for analyses made before event types were asked for. */
+  eventType?: EventType | null;
   /** References the story had when analysed. */
   referenceCount: number;
   assets: AnalysisAsset[];
@@ -476,6 +495,15 @@ export interface AiSettings {
   anthropic: { apiKey: SecretView; model: ModelSetting };
   prompts: Record<PromptName, { value: string; isDefault: boolean; defaultValue: string }>;
   display: { showModel: boolean };
+  /** Learning from outcomes. */
+  learning: LearningSwitches;
+}
+
+export interface LearningSwitches {
+  /** Record each asset call and measure the price afterwards. */
+  tracking: boolean;
+  /** Give the track record back to the AI with each analysis. */
+  feedback: boolean;
 }
 
 /** null resets a field to .env / the built-in prompt. */
@@ -487,6 +515,7 @@ export interface AiSettingsPatch {
   anthropic?: { apiKey?: string | null; model?: string | null };
   prompts?: Partial<Record<PromptName, string | null>>;
   showModel?: boolean;
+  learning?: Partial<LearningSwitches>;
 }
 
 export type SettingsWarning =
@@ -510,4 +539,56 @@ export interface ConnectionTestResult {
   provider?: LlmProvider;
   key: { ok: boolean; label?: string | null; limitRemaining?: number | null; error?: string };
   model: { ok: boolean; id: string; latencyMs?: number; cost?: number | null; error?: string };
+}
+
+// ---- learning from outcomes (GET /outcomes/...)
+export type PredictionSource = 'analysis' | 'market';
+export type Horizon = '1h' | '4h' | '24h';
+export type PredictionStatus = 'pending' | 'done' | 'unsupported' | 'error';
+
+export interface OutcomeGroup {
+  key: string;
+  n: number;
+  hits: number;
+  /** 0-100 */
+  hitRate: number | null;
+  /** Average move (%) vs BTC. */
+  avgMove: number | null;
+  /** Enough calls to be given to the AI. */
+  reliable: boolean;
+}
+
+export interface OutcomeSummary {
+  source: PredictionSource;
+  tracking: boolean;
+  feedback: boolean;
+  minSamples: number;
+  mainHorizon: Horizon;
+  counts: Record<PredictionStatus, number>;
+  horizons: Record<Horizon, { n: number; hits: number; hitRate: number | null }>;
+  byEventType: OutcomeGroup[];
+  byConfidence: OutcomeGroup[];
+  byDirection: OutcomeGroup[];
+  byAsset: OutcomeGroup[];
+  /** What the AI is given right now; null when switched off or not enough data. */
+  feedbackText: string | null;
+}
+
+export interface PredictionView {
+  id: number;
+  source: PredictionSource;
+  sourceKey: number;
+  newsId: number | null;
+  title: string | null;
+  symbol: string;
+  assetType: string;
+  direction: Direction;
+  confidence: number;
+  eventType: EventType | null;
+  model: string;
+  baseTime: string;
+  status: PredictionStatus;
+  error: string | null;
+  moves: Record<Horizon, number | null>;
+  verdicts: Record<Horizon, 'hit' | 'miss' | null>;
 }

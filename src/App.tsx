@@ -12,6 +12,7 @@ const FetchPage = lazy(() => import('./pages/FetchPage').then((m) => ({ default:
 const AiUsagePage = lazy(() => import('./pages/AiUsagePage').then((m) => ({ default: m.AiUsagePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const MarketPage = lazy(() => import('./pages/MarketPage').then((m) => ({ default: m.MarketPage })));
+const AccuracyPage = lazy(() => import('./pages/AccuracyPage').then((m) => ({ default: m.AccuracyPage })));
 
 export function App() {
   return (
@@ -25,6 +26,7 @@ export function App() {
               <Route path="sources" element={<SourcesPage />} />
               <Route path="fetch" element={<FetchPage />} />
               <Route path="ai-usage" element={<AiUsagePage />} />
+              <Route path="accuracy" element={<AccuracyPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

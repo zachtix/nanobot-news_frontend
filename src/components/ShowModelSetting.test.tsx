@@ -86,6 +86,7 @@ describe('show model name setting', () => {
         market: { value: 'p', isDefault: true, defaultValue: 'p' },
       },
       display: { showModel: true },
+      learning: { tracking: true, feedback: true },
     };
     vi.spyOn(api, 'getAiSettings').mockResolvedValue(settings);
     vi.spyOn(api, 'listModels').mockResolvedValue([]);

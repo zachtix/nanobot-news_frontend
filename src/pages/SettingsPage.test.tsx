@@ -25,6 +25,7 @@ const baseSettings = (): AiSettings => ({
     market: { value: 'Market brief. JSON.', isDefault: true, defaultValue: 'Market brief. JSON.' },
   },
   display: { showModel: true },
+  learning: { tracking: true, feedback: true },
 });
 
 /** The model field is a searchable combobox: pick a listed model, or an unlisted id offered as a custom value. */
@@ -66,6 +67,7 @@ describe('SettingsPage', () => {
       if (patch.apiKey) s.apiKey = { configured: true, masked: 'sk-or-v1-n…w123', source: 'settings' };
       if (patch.model) s.model = { ...s.model, value: patch.model, source: 'settings' };
       if (patch.showModel !== undefined) s.display = { showModel: patch.showModel };
+      if (patch.learning) s.learning = { ...s.learning, ...patch.learning };
       if (patch.provider) s.provider = { ...s.provider, value: patch.provider, source: 'settings' };
       if (patch.anthropic?.apiKey) s.anthropic.apiKey = { configured: true, masked: 'sk-ant-api…k123', source: 'settings' };
       if (patch.anthropic?.model) s.anthropic.model = { ...s.anthropic.model, value: patch.anthropic.model, source: 'settings' };
@@ -311,6 +313,21 @@ describe('SettingsPage', () => {
     await pickModel(user, within(card).getByLabelText('Model ID'), 'claude-sonnet-5-5');
     await user.click(within(card).getByRole('button', { name: 'บันทึก' }));
     expect(update).toHaveBeenCalledWith({ anthropic: { model: 'claude-sonnet-5-5' } });
+  });
+
+  it('switches learning from outcomes off without touching the other switch', async () => {
+    const user = userEvent.setup();
+    renderPage(<SettingsPage />, { path: '/settings' });
+    const card = await screen.findByRole('region', { name: 'เรียนรู้จากผลจริง' });
+    const feedback = within(card).getByRole('switch', { name: 'ใช้สถิติย้อนหลังช่วยวิเคราะห์' });
+    expect(feedback).toHaveAttribute('aria-checked', 'true');
+    expect(within(card).getByRole('link', { name: 'ดูความแม่นของ AI' })).toHaveAttribute('href', '/accuracy');
+
+    await user.click(feedback);
+
+    expect(update).toHaveBeenCalledWith({ learning: { feedback: false } });
+    await waitFor(() => expect(within(card).getByRole('switch', { name: 'ใช้สถิติย้อนหลังช่วยวิเคราะห์' })).toHaveAttribute('aria-checked', 'false'));
+    expect(within(card).getByRole('switch', { name: 'เก็บผลราคาหลังข่าว' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows save errors', async () => {

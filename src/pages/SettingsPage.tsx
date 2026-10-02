@@ -1,5 +1,6 @@
 import { Bot, Check, ChevronsUpDown, CircleCheck, CircleX, KeyRound, Loader2, PlugZap, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PROVIDER_LABEL, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -103,6 +104,7 @@ export function SettingsPage() {
         </>
       )}
       <ModelCard settings={settings} save={save} />
+      <LearningCard settings={settings} save={save} />
       <DisplayCard settings={settings} save={save} />
       <PromptsCard settings={settings} save={save} />
     </div>
@@ -224,6 +226,46 @@ function DisplayCard({ settings, save }: { settings: AiSettings; save: SaveFn })
             aria-label={t('settings.showModel')}
           />
         </div>
+        <NoticeLine notice={saver.notice} />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Learning from outcomes: two switches, saved as soon as they are flipped. */
+function LearningCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
+  const { t } = useI18n();
+  const saver = useSaver(save);
+  const row = (key: 'tracking' | 'feedback') => (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-0.5">
+        <Label htmlFor={`learning-${key}`}>{t(`settings.learning.${key}`)}</Label>
+        <p className="text-sm text-muted-foreground">{t(`settings.learning.${key}Help`)}</p>
+      </div>
+      <Switch
+        id={`learning-${key}`}
+        checked={settings.learning[key]}
+        disabled={saver.busy}
+        onCheckedChange={(checked) => saver.run({ learning: { [key]: checked } })}
+        aria-label={t(`settings.learning.${key}`)}
+      />
+    </div>
+  );
+  return (
+    <Card role="region" aria-label={t('settings.learning.title')}>
+      <CardHeader>
+        <CardTitle>{t('settings.learning.title')}</CardTitle>
+        <CardDescription>
+          {t('settings.learning.help')}{' '}
+          <Link to="/accuracy" className="text-primary hover:underline">
+            {t('settings.learning.open')}
+          </Link>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {row('tracking')}
+        <Separator />
+        {row('feedback')}
         <NoticeLine notice={saver.notice} />
       </CardContent>
     </Card>

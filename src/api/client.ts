@@ -4,6 +4,9 @@ import type {
   AiSettingsPatch,
   ConnectionTestResult,
   LlmProvider,
+  OutcomeSummary,
+  PredictionSource,
+  PredictionView,
   MarketPreview,
   MarketRequest,
   MarketRun,
@@ -131,6 +134,11 @@ export const api = {
   /** Model list of a provider (default: the active one). */
   listModels: (provider?: LlmProvider) => request<ModelInfo[]>(`/settings/ai/models${toQuery({ provider })}`),
   promptExamples: () => request<Record<PromptName, PromptExample>>('/settings/ai/examples'),
+
+  outcomeSummary: (source: PredictionSource) => request<OutcomeSummary>(`/outcomes/summary${toQuery({ source })}`),
+  outcomePredictions: (query: { source: PredictionSource; page: number; limit: number }) =>
+    request<Paginated<PredictionView>>(`/outcomes/predictions${toQuery(query)}`),
+  refreshOutcomes: () => request<{ updated: number }>('/outcomes/refresh', { method: 'POST' }),
 
   marketPreview: (window: MarketWindow, sourceIds: number[]) =>
     request<MarketPreview>(`/market/preview${toQuery({ window, sourceIds: sourceIds.join(',') || undefined })}`),

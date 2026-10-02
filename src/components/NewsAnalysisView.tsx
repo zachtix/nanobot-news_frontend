@@ -124,6 +124,7 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
               {t('analysis.impact', { level: t(`analysis.impact.${analysis.impact}`) })}
             </Badge>
             <Badge variant="secondary">{t(`analysis.horizon.${analysis.timeHorizon}`)}</Badge>
+            {analysis.eventType && <Badge variant="info">{t(`event.${analysis.eventType}`)}</Badge>}
           </header>
 
           <p className="text-sm leading-relaxed">{summary}</p>
