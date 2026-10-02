@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { CircleCheck, CircleX, RefreshCw } from 'lucide-react';
+import { CircleCheck, CircleX, RefreshCw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { api, describeError } from '@/api/client';
 import type { Horizon, OutcomeGroup, OutcomeSummary, Paginated, PredictionSource, PredictionView } from '@/api/types';
@@ -154,60 +155,135 @@ function FeedbackCard({ summary }: { summary: OutcomeSummary }) {
   );
 }
 
+/** Groups with fewer judged calls than this are folded away by default (too few to read anything into). */
+const SMALL_GROUP = 5;
+type GroupTab = 'event' | 'confidence' | 'direction' | 'asset';
+
+/** One grouping at a time (tabs), each row with a bar of its hit rate against the overall rate. */
 function GroupsCard({ summary }: { summary: OutcomeSummary }) {
   const { t } = useI18n();
-  const groups: [MessageKey, OutcomeGroup[], (key: string) => string][] = [
-    ['acc.by.eventType', summary.byEventType, (k) => t(`event.${k}` as MessageKey)],
-    ['acc.by.confidence', summary.byConfidence, (k) => `${k}%`],
-    ['acc.by.direction', summary.byDirection, (k) => t(`analysis.dir.${k}` as MessageKey)],
-    ['acc.by.asset', summary.byAsset, (k) => k],
+  const [tab, setTab] = useState<GroupTab>('event');
+  const [showSmall, setShowSmall] = useState(false);
+  const overall = summary.horizons[summary.mainHorizon].hitRate;
+  const tabs: { id: GroupTab; title: MessageKey; rows: OutcomeGroup[]; label: (key: string) => string }[] = [
+    { id: 'event', title: 'acc.by.eventType', rows: summary.byEventType, label: (k) => t(`event.${k}` as MessageKey) },
+    { id: 'confidence', title: 'acc.by.confidence', rows: summary.byConfidence, label: (k) => `${k}%` },
+    { id: 'direction', title: 'acc.by.direction', rows: summary.byDirection, label: (k) => t(`analysis.dir.${k}` as MessageKey) },
+    { id: 'asset', title: 'acc.by.asset', rows: summary.byAsset, label: (k) => k },
   ];
+
   return (
     <Card role="region" aria-label={t('acc.groupsTitle', { h: summary.mainHorizon })}>
       <CardHeader>
         <CardTitle>{t('acc.groupsTitle', { h: summary.mainHorizon })}</CardTitle>
+        <CardDescription>
+          {overall == null ? t('acc.groupsHelpNoData') : t('acc.groupsHelp', { pct: overall, h: summary.mainHorizon })}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-5 lg:grid-cols-2">
-        {groups.map(([title, rows, label]) => (
-          <div key={title} className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium">{t(title)}</h3>
-            {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('acc.noGroups')}</p>
-            ) : (
-              <Table aria-label={t(title)}>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('acc.col.group')}</TableHead>
-                    <TableHead className="text-right">{t('acc.col.n')}</TableHead>
-                    <TableHead className="text-right">{t('acc.col.hitRate')}</TableHead>
-                    <TableHead className="text-right">{t('acc.col.avgMove')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((g) => (
-                    <TableRow key={g.key}>
-                      <TableCell>
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {label(g.key)}
-                          {g.reliable && summary.feedback && (
-                            <Badge variant="info" className="text-[10px]">
-                              {t('acc.sentToAi')}
-                            </Badge>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{g.n}</TableCell>
-                      <TableCell className="text-right tabular-nums">{g.hitRate == null ? '-' : `${g.hitRate}%`}</TableCell>
-                      <TableCell className="text-right tabular-nums">{g.avgMove == null ? '-' : signed(g.avgMove)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        ))}
+      <CardContent>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v as GroupTab);
+            setShowSmall(false);
+          }}
+        >
+          <TabsList aria-label={t('acc.groupsTitle', { h: summary.mainHorizon })} className="flex-wrap">
+            {tabs.map((g) => (
+              <TabsTrigger key={g.id} value={g.id}>
+                {t(g.title)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {tabs.map((g) => {
+            const big = g.rows.filter((r) => r.n >= SMALL_GROUP);
+            const small = g.rows.filter((r) => r.n < SMALL_GROUP);
+            const shown = showSmall ? g.rows : big;
+            return (
+              <TabsContent key={g.id} value={g.id} className="flex flex-col gap-3 pt-3">
+                {g.rows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('acc.noGroups')}</p>
+                ) : (
+                  <>
+                    <Table aria-label={t(g.title)} className="table-fixed">
+                      <colgroup>
+                        <col />
+                        <col className="w-20" />
+                        <col className="w-[42%]" />
+                        <col className="w-28" />
+                      </colgroup>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t(g.title)}</TableHead>
+                          <TableHead className="text-right">{t('acc.col.n')}</TableHead>
+                          <TableHead>{t('acc.col.hitRate')}</TableHead>
+                          <TableHead className="text-right" title={t('acc.col.avgMoveHelp')}>
+                            {t('acc.col.avgMove')}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {shown.map((r) => (
+                          <GroupRow key={r.key} row={r} label={g.label(r.key)} overall={overall} sentToAi={r.reliable && summary.feedback} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        {summary.feedback && (
+                          <>
+                            <Sparkles className="size-3.5 text-primary" aria-hidden />
+                            {t('acc.sentToAiLegend', { n: summary.minSamples })}
+                          </>
+                        )}
+                      </span>
+                      {small.length > 0 && (
+                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setShowSmall((v) => !v)}>
+                          {showSmall ? t('acc.hideSmall') : t('acc.showSmall', { count: small.length, n: SMALL_GROUP })}
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+            );
+          })}
+        </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function GroupRow({ row, label, overall, sentToAi }: { row: OutcomeGroup; label: string; overall: number | null; sentToAi: boolean }) {
+  const { t } = useI18n();
+  const rate = row.hitRate ?? 0;
+  const better = overall != null && rate >= overall;
+  const small = row.n < SMALL_GROUP;
+  return (
+    <TableRow className={cn(small && 'text-muted-foreground')}>
+      <TableCell className="whitespace-normal">
+        <span className="inline-flex items-center gap-1.5">
+          {label}
+          {sentToAi && <Sparkles className="size-3.5 shrink-0 text-primary" role="img" aria-label={t('acc.sentToAi')} />}
+        </span>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{row.n}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <div className="relative h-2 flex-1 rounded-full bg-muted" aria-hidden>
+            <div
+              className={cn('absolute inset-y-0 left-0 rounded-full', small ? 'bg-muted-foreground/40' : better ? 'bg-success' : 'bg-danger/70')}
+              style={{ width: `${Math.min(100, rate)}%` }}
+            />
+            {overall != null && <div className="absolute -inset-y-1 w-0.5 rounded bg-foreground/60" style={{ left: `${overall}%` }} />}
+          </div>
+          <span className="w-12 text-right tabular-nums">{row.hitRate == null ? '-' : `${row.hitRate}%`}</span>
+        </div>
+      </TableCell>
+      <TableCell className={cn('text-right tabular-nums', !small && row.avgMove != null && (row.avgMove > 0 ? 'text-success' : row.avgMove < 0 ? 'text-danger' : ''))}>
+        {row.avgMove == null ? '-' : signed(row.avgMove)}
+      </TableCell>
+    </TableRow>
   );
 }
 

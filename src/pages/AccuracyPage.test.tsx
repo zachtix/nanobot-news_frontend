@@ -67,9 +67,10 @@ describe('AccuracyPage', () => {
 
     const events = screen.getByRole('table', { name: 'ประเภทเหตุการณ์' });
     const hack = within(events).getByText('แฮก / ช่องโหว่').closest('tr')!;
-    expect(within(hack).getByText('ส่งให้ AI')).toBeInTheDocument(); // enough calls
+    expect(within(hack).getByRole('img', { name: 'ส่งให้ AI' })).toBeInTheDocument(); // enough calls
+    expect(within(hack).getByText('75%')).toBeInTheDocument();
     expect(within(hack).getByText('-6.2%')).toBeInTheDocument();
-    expect(within(within(events).getByText('ETF / เงินไหลเข้าออกกองทุน').closest('tr')!).queryByText('ส่งให้ AI')).not.toBeInTheDocument();
+    expect(within(within(events).getByText('ETF / เงินไหลเข้าออกกองทุน').closest('tr')!).queryByRole('img', { name: 'ส่งให้ AI' })).not.toBeInTheDocument();
 
     const feedback = screen.getByRole('region', { name: 'สิ่งที่ส่งให้ AI ตอนนี้' });
     expect(feedback.querySelector('pre')!.textContent).toBe(FEEDBACK);
@@ -77,6 +78,29 @@ describe('AccuracyPage', () => {
     const calls = await screen.findByRole('region', { name: 'คำทำนายแต่ละรายการ' });
     expect(within(calls).getByText('Exchange hacked for $40M')).toBeInTheDocument();
     expect(within(calls).getByText('-3.4%')).toBeInTheDocument();
+  });
+
+  it('shows one grouping at a time and folds away groups with little data', async () => {
+    vi.mocked(api.outcomeSummary).mockResolvedValue(
+      summary({
+        byAsset: [
+          { key: 'BTC', n: 12, hits: 7, hitRate: 58.3, avgMove: 0.8, reliable: false },
+          { key: 'ATOM', n: 1, hits: 0, hitRate: 0, avgMove: -6.3, reliable: false },
+        ],
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage(<AccuracyPage />, { path: '/accuracy' });
+    await screen.findByRole('table', { name: 'ประเภทเหตุการณ์' });
+    expect(screen.queryByRole('table', { name: 'สินทรัพย์' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'สินทรัพย์' }));
+    const assets = screen.getByRole('table', { name: 'สินทรัพย์' });
+    expect(within(assets).getByText('BTC')).toBeInTheDocument();
+    expect(within(assets).queryByText('ATOM')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /แสดงอีก 1 กลุ่มที่ข้อมูลน้อย/ }));
+    expect(within(screen.getByRole('table', { name: 'สินทรัพย์' })).getByText('ATOM')).toBeInTheDocument();
   });
 
   it('says when nothing is sent yet, or when the switches are off', async () => {
