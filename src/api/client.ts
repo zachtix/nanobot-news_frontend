@@ -1,4 +1,12 @@
 import type {
+  BacktestJob,
+  BacktestPlan,
+  BacktestRequest,
+  Candle,
+  CandleInterval,
+  ChartAccuracySummary,
+  ChartAnalysis,
+  ChartMode,
   AiCallLog,
   AiSettings,
   AiSettingsPatch,
@@ -145,6 +153,22 @@ export const api = {
   startMarket: (body: MarketRequest) => request<MarketRun>('/market/analyses', { method: 'POST', json: body }),
   marketRuns: (page = 1, limit = 10) => request<Paginated<MarketRun>>(`/market/analyses${toQuery({ page, limit })}`),
   marketRun: (id: number) => request<MarketRunDetail>(`/market/analyses/${id}`),
+
+  /** Analyse a coin's chart as of now (no `at`) or a past moment; the same input is reused for free unless forced. */
+  analyzeChart: (body: { symbol: string; at?: string; force?: boolean }) =>
+    request<{ analysis: ChartAnalysis; cached: boolean }>('/chart/analyses', { method: 'POST', json: body }),
+  chartAnalyses: (query: { symbol?: string; mode?: ChartMode; batchId?: number; page?: number; limit?: number } = {}) =>
+    request<Paginated<ChartAnalysis> & { totalCost: number }>(`/chart/analyses${toQuery(query)}`),
+  chartAnalysis: (id: number) => request<ChartAnalysis>(`/chart/analyses/${id}`),
+  chartSummary: (query: { symbol?: string; mode?: ChartMode } = {}) => request<ChartAccuracySummary>(`/chart/summary${toQuery(query)}`),
+  chartCandles: (symbol: string, interval: CandleInterval, before?: string) =>
+    request<Candle[]>(`/chart/candles${toQuery({ symbol, interval, before })}`),
+  planBacktest: (body: BacktestRequest) =>
+    request<BacktestPlan>(`/chart/backtests/plan${toQuery({ ...body, symbols: body.symbols.join(',') })}`),
+  startBacktest: (body: BacktestRequest) => request<BacktestJob>('/chart/backtests', { method: 'POST', json: body }),
+  backtestStatus: () => request<BacktestJob | null>('/chart/backtests/current'),
+  stopBacktest: () => request<BacktestJob | null>('/chart/backtests/current/stop', { method: 'POST' }),
+  refreshChartOutcomes: () => request<{ updated: number }>('/chart/refresh', { method: 'POST' }),
 
   getScheduler: () => request<SchedulerStatus>('/scheduler'),
   updateScheduler: (patch: Partial<Pick<SchedulerStatus, 'enabled' | 'cron' | 'autoTranslate' | 'autoAnalyze'>>) =>

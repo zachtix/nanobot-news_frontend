@@ -21,13 +21,15 @@ import { formatCredit, formatNumber } from '@/utils/format';
  * Nanobot chart slots (--chart-1..5, light + dark). The five real tasks take the five slots;
  * connection tests are not work, so they get neutral ink instead of a sixth (unvalidated) hue.
  */
-export const PURPOSES = ['dedup', 'translate', 'tag', 'analyze', 'market', 'test'] as const;
+export const PURPOSES = ['dedup', 'translate', 'tag', 'analyze', 'market', 'chart', 'test'] as const;
 const PURPOSE_COLOR: Record<(typeof PURPOSES)[number], string> = {
   dedup: 'var(--chart-1)',
   translate: 'var(--chart-2)',
   tag: 'var(--chart-3)',
   analyze: 'var(--chart-4)',
   market: 'var(--chart-5)',
+  // Sixth task: the info ink (darker than slot 1 in light, lighter in dark) keeps it apart from the five slots.
+  chart: 'var(--info)',
   test: 'var(--muted-foreground)',
 };
 

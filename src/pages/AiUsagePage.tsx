@@ -40,6 +40,7 @@ const PURPOSE_LABEL: Record<string, MessageKey> = {
   tag: 'ai.purpose.tag',
   analyze: 'ai.purpose.analyze',
   market: 'ai.purpose.market',
+  chart: 'ai.purpose.chart',
   test: 'ai.purpose.test',
 };
 const PURPOSE_BADGE: Record<string, string> = {
@@ -48,6 +49,7 @@ const PURPOSE_BADGE: Record<string, string> = {
   tag: 'bg-chart-3/15 text-chart-3',
   analyze: 'bg-chart-4/15 text-chart-4',
   market: 'bg-chart-5/15 text-chart-5',
+  chart: 'bg-info-bg text-info',
   test: 'bg-muted text-muted-foreground',
 };
 /** 1 = last 24 hours, charted per hour; the rest are calendar days, charted per day. */

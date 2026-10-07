@@ -84,6 +84,7 @@ describe('show model name setting', () => {
         tag: { value: 'p', isDefault: true, defaultValue: 'p' },
         analyze: { value: 'p', isDefault: true, defaultValue: 'p' },
         market: { value: 'p', isDefault: true, defaultValue: 'p' },
+        chart: { value: 'p', isDefault: true, defaultValue: 'p' },
       },
       display: { showModel: true },
       learning: { tracking: true, feedback: true },

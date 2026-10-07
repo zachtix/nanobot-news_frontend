@@ -23,6 +23,7 @@ const baseSettings = (): AiSettings => ({
     tag: { value: 'Tag. JSON.', isDefault: true, defaultValue: 'Tag. JSON.' },
     analyze: { value: 'My custom analysis prompt. JSON.', isDefault: false, defaultValue: 'Default analysis. JSON.' },
     market: { value: 'Market brief. JSON.', isDefault: true, defaultValue: 'Market brief. JSON.' },
+    chart: { value: 'Chart. JSON.', isDefault: true, defaultValue: 'Chart. JSON.' },
   },
   display: { showModel: true },
   learning: { tracking: true, feedback: true },
@@ -64,6 +65,7 @@ describe('SettingsPage', () => {
       translate: { sample: '{"items":[]}', latest: null },
       tag: { sample: '{"items":[]}', latest: null },
       market: { sample: '{"period":"last 24 hours","stories":[]}', latest: null },
+      chart: { sample: 'COIN: BTC (spot, priced in USDT).', latest: null },
       analyze: {
         sample: '{"title":"Sample story","reports":[]}',
         latest: {

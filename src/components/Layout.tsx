@@ -20,6 +20,7 @@ import { ThemeToggle } from './ThemeToggle';
 const NAV: { to: string; label: MessageKey; end?: boolean }[] = [
   { to: '/', label: 'nav.news', end: true },
   { to: '/market', label: 'nav.market' },
+  { to: '/chart', label: 'nav.chart' },
   { to: '/sources', label: 'nav.sources' },
   { to: '/ai-usage', label: 'nav.aiUsage' },
   { to: '/accuracy', label: 'nav.accuracy' },
@@ -67,7 +68,7 @@ export function Layout() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <div className="flex items-center gap-2 font-semibold">
             <span className="size-2.5 rotate-45 rounded-xs bg-primary" aria-hidden />
-            Crypto News Hub
+            Nano Analysis
           </div>
           <nav className="flex flex-wrap gap-1" aria-label="main">
             {NAV.map((item) => (

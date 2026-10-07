@@ -37,7 +37,7 @@ import { useRefreshHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatNumber } from '@/utils/format';
 
-const PROMPTS: PromptName[] = ['dedup', 'translate', 'tag', 'analyze', 'market'];
+const PROMPTS: PromptName[] = ['dedup', 'translate', 'tag', 'analyze', 'market', 'chart'];
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 type SaveFn = (patch: AiSettingsPatch) => Promise<boolean>;

@@ -11,6 +11,7 @@ const SourcesPage = lazy(() => import('./pages/SourcesPage').then((m) => ({ defa
 const AiUsagePage = lazy(() => import('./pages/AiUsagePage').then((m) => ({ default: m.AiUsagePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const MarketPage = lazy(() => import('./pages/MarketPage').then((m) => ({ default: m.MarketPage })));
+const ChartPage = lazy(() => import('./pages/ChartPage').then((m) => ({ default: m.ChartPage })));
 const AccuracyPage = lazy(() => import('./pages/AccuracyPage').then((m) => ({ default: m.AccuracyPage })));
 
 export function App() {
@@ -22,6 +23,7 @@ export function App() {
             <Route element={<Layout />}>
               <Route index element={<NewsPage />} />
               <Route path="market" element={<MarketPage />} />
+              <Route path="chart" element={<ChartPage />} />
               <Route path="sources" element={<SourcesPage />} />
               {/* Run history now lives on Sources and the schedule in Settings; keep old links working. */}
               <Route path="fetch" element={<Navigate to="/sources" replace />} />

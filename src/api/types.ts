@@ -350,6 +350,7 @@ export interface Health {
   ai: { enabled: boolean; provider?: LlmProvider; model: string };
   translation?: { enabled: boolean };
   analysis?: { enabled: boolean };
+  chart?: { enabled: boolean };
   tagging?: { enabled: boolean };
   /** Display preferences set on the settings page. */
   ui?: { showModel: boolean };
@@ -366,7 +367,7 @@ export interface TranslationStatus {
 
 // ---- AI settings ----
 
-export type PromptName = 'dedup' | 'translate' | 'tag' | 'analyze' | 'market';
+export type PromptName = 'dedup' | 'translate' | 'tag' | 'analyze' | 'market' | 'chart';
 
 // ---------------------------------------------------------------- market analysis
 
@@ -621,3 +622,121 @@ export const CHART_SETUPS = [
   'below_ema200',
 ] as const;
 export type ChartSetup = (typeof CHART_SETUPS)[number];
+
+// ---------------------------------------------------------------- chart analysis
+
+export type ChartHorizon = '4h' | '24h' | '3d';
+export type ChartTrend = 'up' | 'down' | 'sideways';
+export type CandleInterval = '1h' | '4h' | '1d';
+
+export interface Candle {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  closeTime: number;
+}
+
+export interface ChartCall {
+  direction: Direction;
+  confidence: number;
+}
+
+export interface ChartAnalysis {
+  id: number;
+  symbol: string;
+  pair: string;
+  /** Only candles closed before this moment were used. */
+  at: string;
+  backtest: boolean;
+  batchId: number | null;
+  model: string;
+  trend: ChartTrend;
+  summaryTh: string;
+  summaryEn: string;
+  signals: { th: string; en: string; bias: Direction }[];
+  supports: number[];
+  resistances: number[];
+  calls: Record<ChartHorizon, ChartCall>;
+  thresholds: Record<ChartHorizon, number>;
+  lastClose: number;
+  /** Exactly what the AI was given. */
+  input: string;
+  cost: number | null;
+  promptTokens: number;
+  completionTokens: number;
+  status: PredictionStatus;
+  basePrice: number | null;
+  price4h: number | null;
+  price24h: number | null;
+  price3d: number | null;
+  error: string | null;
+  createdAt: string;
+  moves: Record<ChartHorizon, number | null>;
+  actual: Record<ChartHorizon, Direction | null>;
+  verdicts: Record<ChartHorizon, 'hit' | 'miss' | null>;
+}
+
+export type ChartMode = 'live' | 'backtest';
+
+export interface BacktestRequest {
+  symbols: string[];
+  from: string;
+  to: string;
+  stepHours: number;
+}
+
+export interface BacktestPlan {
+  symbols: string[];
+  moments: number;
+  total: number;
+  maxTotal: number;
+  from: string;
+  to: string;
+  estimatedCost: number | null;
+}
+
+export interface BacktestJob {
+  id: number;
+  status: 'running' | 'done' | 'stopped' | 'failed';
+  symbols: string[];
+  from: string;
+  to: string;
+  stepHours: number;
+  total: number;
+  done: number;
+  reused: number;
+  failed: number;
+  cost: number;
+  errors: string[];
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface ChartAccuracyGroup {
+  key: string;
+  n: number;
+  hits: number;
+  hitRate: number | null;
+}
+
+export interface ChartHorizonAccuracy {
+  n: number;
+  hits: number;
+  hitRate: number | null;
+  directional: { n: number; hits: number; hitRate: number | null };
+  baselines: Record<Direction, number | null>;
+}
+
+export interface ChartAccuracySummary {
+  filter: { symbol?: string; mode?: ChartMode };
+  counts: Record<PredictionStatus, number>;
+  mainHorizon: ChartHorizon;
+  horizons: Record<ChartHorizon, ChartHorizonAccuracy>;
+  byDirection: ChartAccuracyGroup[];
+  byConfidence: ChartAccuracyGroup[];
+  bySymbol: ChartAccuracyGroup[];
+  byTrend: ChartAccuracyGroup[];
+}
