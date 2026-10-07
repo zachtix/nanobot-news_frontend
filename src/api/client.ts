@@ -6,6 +6,8 @@ import type {
   CandleInterval,
   ChartAccuracySummary,
   ChartAnalysis,
+  ChartAsset,
+  ChartCompanion,
   ChartMode,
   AiCallLog,
   AiSettings,
@@ -14,6 +16,9 @@ import type {
   LlmProvider,
   OutcomeSummary,
   PredictionSource,
+  PredictionStatus,
+  Direction,
+  EventType,
   PredictionView,
   MarketPreview,
   MarketRequest,
@@ -122,11 +127,11 @@ export const api = {
   runFetch: (sourceIds?: number[]) =>
     request<FetchRun>('/fetch/run', { method: 'POST', json: sourceIds?.length ? { sourceIds } : {} }),
   fetchStatus: () => request<FetchStatus>('/fetch/status'),
-  listRuns: (query: { page?: number; limit?: number } = {}) => request<Paginated<FetchRun>>(`/fetch/runs${toQuery(query)}`),
+  listRuns: (query: { page?: number; limit?: number; trigger?: FetchRun['trigger']; status?: FetchRun['status']; q?: string } = {}) => request<Paginated<FetchRun>>(`/fetch/runs${toQuery(query)}`),
 
   aiUsageSummary: (days = 30) => request<AiUsageSummary>(`/ai-usage/summary${toQuery({ days })}`),
   aiUsageCalls: (
-    query: { page?: number; limit?: number; fetchRunId?: number; success?: boolean; purpose?: string } = {},
+    query: { page?: number; limit?: number; fetchRunId?: number; success?: boolean; purpose?: string; q?: string } = {},
   ) =>
     request<Paginated<AiUsageCall>>(`/ai-usage/calls${toQuery(query)}`),
   /** Full prompt + raw reply of one call (404 if not logged or pruned). */
@@ -144,14 +149,24 @@ export const api = {
   promptExamples: () => request<Record<PromptName, PromptExample>>('/settings/ai/examples'),
 
   outcomeSummary: (source: PredictionSource) => request<OutcomeSummary>(`/outcomes/summary${toQuery({ source })}`),
-  outcomePredictions: (query: { source: PredictionSource; page: number; limit: number }) =>
+  outcomePredictions: (query: {
+    source: PredictionSource;
+    page: number;
+    limit: number;
+    status?: PredictionStatus;
+    symbol?: string;
+    direction?: Direction;
+    eventType?: EventType;
+    q?: string;
+  }) =>
     request<Paginated<PredictionView>>(`/outcomes/predictions${toQuery(query)}`),
   refreshOutcomes: () => request<{ updated: number }>('/outcomes/refresh', { method: 'POST' }),
 
   marketPreview: (window: MarketWindow, sourceIds: number[]) =>
     request<MarketPreview>(`/market/preview${toQuery({ window, sourceIds: sourceIds.join(',') || undefined })}`),
   startMarket: (body: MarketRequest) => request<MarketRun>('/market/analyses', { method: 'POST', json: body }),
-  marketRuns: (page = 1, limit = 10) => request<Paginated<MarketRun>>(`/market/analyses${toQuery({ page, limit })}`),
+  marketRuns: (query: { page: number; limit: number; status?: MarketRun['status']; q?: string }) =>
+    request<Paginated<MarketRun>>(`/market/analyses${toQuery(query)}`),
   marketRun: (id: number) => request<MarketRunDetail>(`/market/analyses/${id}`),
 
   /** Analyse a coin's chart as of now (no `at`) or a past moment; the same input is reused for free unless forced. */
@@ -160,9 +175,15 @@ export const api = {
   chartAnalyses: (query: { symbol?: string; mode?: ChartMode; batchId?: number; page?: number; limit?: number } = {}) =>
     request<Paginated<ChartAnalysis> & { totalCost: number }>(`/chart/analyses${toQuery(query)}`),
   chartAnalysis: (id: number) => request<ChartAnalysis>(`/chart/analyses/${id}`),
+  /** Stored chart calls of these assets as of a news / market call's moment (never calls the AI). */
+  chartCompanions: (assets: ChartAsset[], at: string) =>
+    request<ChartCompanion[]>(`/chart/companions${toQuery({ assets: assets.map((a) => `${a.assetType}:${a.symbol}`).join(','), at })}`),
+  /** The same, analysing the assets given that have none yet: one AI call per asset, from the chart alone. */
+  runChartCompanions: (assets: ChartAsset[], at: string) =>
+    request<ChartCompanion[]>('/chart/companions', { method: 'POST', json: { assets, at } }),
   chartSummary: (query: { symbol?: string; mode?: ChartMode } = {}) => request<ChartAccuracySummary>(`/chart/summary${toQuery(query)}`),
-  chartCandles: (symbol: string, interval: CandleInterval, before?: string) =>
-    request<Candle[]>(`/chart/candles${toQuery({ symbol, interval, before })}`),
+  chartCandles: (symbol: string, interval: CandleInterval, before?: string, assetType?: ChartAsset['assetType']) =>
+    request<Candle[]>(`/chart/candles${toQuery({ symbol, interval, before, assetType })}`),
   planBacktest: (body: BacktestRequest) =>
     request<BacktestPlan>(`/chart/backtests/plan${toQuery({ ...body, symbols: body.symbols.join(',') })}`),
   startBacktest: (body: BacktestRequest) => request<BacktestJob>('/chart/backtests', { method: 'POST', json: body }),

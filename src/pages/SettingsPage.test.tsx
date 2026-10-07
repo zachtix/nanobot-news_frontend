@@ -27,7 +27,6 @@ const baseSettings = (): AiSettings => ({
   },
   display: { showModel: true },
   learning: { tracking: true, feedback: true },
-  chart: { enabled: false },
 });
 
 /** The model field is a searchable combobox: pick a listed model, or an unlisted id offered as a custom value. */
@@ -82,7 +81,6 @@ describe('SettingsPage', () => {
       if (patch.model) s.model = { ...s.model, value: patch.model, source: 'settings' };
       if (patch.showModel !== undefined) s.display = { showModel: patch.showModel };
       if (patch.learning) s.learning = { ...s.learning, ...patch.learning };
-      if (patch.chart) s.chart = { enabled: patch.chart.enabled ?? false };
       if (patch.provider) s.provider = { ...s.provider, value: patch.provider, source: 'settings' };
       if (patch.anthropic?.apiKey) s.anthropic.apiKey = { configured: true, masked: 'sk-ant-api…k123', source: 'settings' };
       if (patch.anthropic?.model) s.anthropic.model = { ...s.anthropic.model, value: patch.anthropic.model, source: 'settings' };
@@ -402,15 +400,10 @@ describe('SettingsPage', () => {
     expect(within(card).getByRole('button', { name: 'บันทึก' })).toBeDisabled();
   });
 
-  it('switches chart data for the AI on (off by default)', async () => {
-    const user = userEvent.setup();
+  it('has no switch that sends chart data to the news AI', async () => {
     renderPage(<SettingsPage />, { path: '/settings' });
-    const card = await screen.findByRole('region', { name: 'ข้อมูลกราฟ' });
-    const toggle = within(card).getByRole('switch', { name: 'ส่งข้อมูลกราฟให้ AI' });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    await user.click(toggle);
-    expect(update).toHaveBeenCalledWith({ chart: { enabled: true } });
-    await waitFor(() => expect(within(card).getByRole('switch', { name: 'ส่งข้อมูลกราฟให้ AI' })).toHaveAttribute('aria-checked', 'true'));
+    await screen.findByRole('region', { name: 'ตั้งเวลาดึงข่าว' });
+    expect(screen.queryByRole('switch', { name: 'ส่งข้อมูลกราฟให้ AI' })).not.toBeInTheDocument();
   });
 
   it('shows validation errors for a bad cron', async () => {

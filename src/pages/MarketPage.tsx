@@ -16,6 +16,7 @@ import type { MarketPreview, MarketRun, MarketRunDetail, MarketWindow, Paginated
 import { DataTable } from '@/components/DataTable';
 import { MarketResultView } from '@/components/market/MarketResultView';
 import { Pagination, usePageSize } from '@/components/Pagination';
+import { TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime } from '@/utils/format';
@@ -380,10 +381,16 @@ function HistoryCard({
   const loaded = useRef(onLoaded);
   loaded.current = onLoaded;
   const anyRunning = data?.items.some((r) => r.status === 'running') ?? false;
+  const list = useTableFilters({ status: ALL });
+  const query = useMemo(
+    () => ({ page, limit, q: list.q, status: filterValue<MarketRun['status']>(list.filters.status) }),
+    [page, limit, list.q, list.filters.status],
+  );
 
+  useEffect(() => setPage(1), [list.key]);
   useEffect(() => {
     let cancelled = false;
-    api.marketRuns(page, limit).then(
+    api.marketRuns(query).then(
       (d) => {
         if (cancelled) return;
         setData(d);
@@ -394,14 +401,14 @@ function HistoryCard({
     return () => {
       cancelled = true;
     };
-  }, [page, limit, refreshKey]);
+  }, [query, page, limit, refreshKey]);
 
   // Keep running rows' status fresh.
   useEffect(() => {
     if (!anyRunning) return;
-    const timer = setInterval(() => api.marketRuns(page, limit).then(setData, () => undefined), POLL_MS * 2);
+    const timer = setInterval(() => api.marketRuns(query).then(setData, () => undefined), POLL_MS * 2);
     return () => clearInterval(timer);
-  }, [anyRunning, page, limit]);
+  }, [anyRunning, query]);
 
   const columns = useMemo<ColumnDef<MarketRun, unknown>[]>(
     () => [
@@ -443,10 +450,27 @@ function HistoryCard({
         <CardDescription>{data ? t('page.showing', { from: data.total ? (data.page - 1) * data.limit + 1 : 0, to: Math.min(data.total, data.page * data.limit), total: data.total }) : ''}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {data && (data.total > 0 || list.active) && (
+          <TableToolbar
+            label={t('market.history')}
+            search={{ value: list.search, onChange: list.setSearch, placeholder: t('market.searchHistory') }}
+            filters={[
+              {
+                id: 'status',
+                label: t('table.filterStatus'),
+                allLabel: t('table.allStatuses'),
+                options: (['success', 'running', 'failed'] as const).map((s) => ({ value: s, label: t(`market.status.${s}`) })),
+                value: list.filters.status,
+                onChange: list.set('status'),
+              },
+            ]}
+            onReset={list.reset}
+          />
+        )}
         {data === null ? (
           <Skeleton className="h-32" aria-label={t('common.loading')} />
         ) : data.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('market.historyEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{list.active ? t('table.noMatches') : t('market.historyEmpty')}</p>
         ) : (
           <DataTable
             id="market-history"

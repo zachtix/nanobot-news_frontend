@@ -1,9 +1,11 @@
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Loader2, Newspaper, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { AssetOutcome, OutcomeScore, useAnalysisOutcomes } from '@/components/AnalysisOutcome';
+import { chartAssets, ChartCompanionsPanel, useChartCompanions } from '@/components/chart/ChartCompanions';
 import { api, describeError } from '@/api/client';
 import type { AnalysisAsset, Direction, News, NewsAnalysis } from '@/api/types';
 import { useHealth } from '@/context/HealthContext';
@@ -45,7 +47,12 @@ interface Props {
   onAnalyzed: (analysis: NewsAnalysis) => void;
 }
 
-/** Chips + collapsible panel for a stored analysis, or the auto tags and the button that creates one. */
+/**
+ * Chips + collapsible panel for a stored analysis, or the auto tags and the button that creates one.
+ * The panel puts the news call and the chart call of the same assets side by side; they are made apart
+ * (neither AI sees the other's input) and each is checked against the price on its own. The chart of each
+ * asset is read only when the reader asks for it.
+ */
 export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
   const { t, lang } = useI18n();
   const showModel = useHealth()?.ui?.showModel !== false;
@@ -53,6 +60,9 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const analysis = news.analysis ?? null;
+  const outcomes = useAnalysisOutcomes('analysis', news.id, analysis?.createdAt ?? '', open && analysis != null);
+  const assets = analysis ? chartAssets(analysis.assets) : [];
+  const charts = useChartCompanions(assets, news.publishedAt, open && analysis != null);
 
   const run = async (force: boolean) => {
     setBusy(true);
@@ -127,53 +137,83 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
             {analysis.eventType && <Badge variant="info">{t(`event.${analysis.eventType}`)}</Badge>}
           </header>
 
-          <p className="text-sm leading-relaxed">{summary}</p>
+          <div className="@container">
+            <div className="grid gap-4 @3xl:grid-cols-2 @3xl:divide-x">
+              <section className="flex min-w-0 flex-col gap-3 @3xl:pr-4" aria-label={t('companion.news')}>
+                <header className="flex flex-wrap items-center gap-2">
+                  <strong className="flex items-center gap-1.5 text-sm">
+                    <Newspaper className="size-4 text-primary" aria-hidden />
+                    {t('companion.news')}
+                  </strong>
+                  {outcomes && <OutcomeScore calls={outcomes} />}
+                </header>
 
-          {analysis.assets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('analysis.noAssets')}</p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {analysis.assets.map((a) => {
-                const d = DIRECTION[a.direction];
-                return (
-                  <li key={a.symbol} className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap items-baseline gap-2 text-sm">
-                      <strong>{a.symbol}</strong>
-                      <span className="text-muted-foreground">{a.name}</span>
-                      <span className={cn('flex items-center gap-1 font-semibold', d.text)}>
-                        <d.Icon className="size-3.5" aria-hidden />
-                        {t(`analysis.dir.${a.direction}`)}
-                      </span>
-                      <span>{t('analysis.confidence', { n: a.confidence })}</span>
-                    </div>
-                    <div
-                      className="h-1.5 max-w-xs overflow-hidden rounded-full bg-border"
-                      role="meter"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={a.confidence}
-                      aria-label={t('analysis.confidence', { n: a.confidence })}
-                    >
-                      <span className={cn('block h-full rounded-full', d.bar)} style={{ width: `${a.confidence}%` }} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">{lang === 'th' ? a.rationaleTh : a.rationaleEn}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                <p className="text-sm leading-relaxed">{summary}</p>
 
-          {newSources > 0 && (
-            <p className="flex flex-wrap items-center gap-2 text-sm text-warning">
-              {t('analysis.stale', { n: newSources })}
-              {canAnalyze && (
-                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => run(true)} disabled={busy}>
-                  {busy ? t('analysis.analyzing') : t('analysis.reanalyze')}
-                </Button>
-              )}
-            </p>
-          )}
-          {error && <p className="text-sm text-danger">{t('analysis.error', { error })}</p>}
+                {analysis.assets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('analysis.noAssets')}</p>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {analysis.assets.map((a) => {
+                      const d = DIRECTION[a.direction];
+                      const call = outcomes?.get(a.symbol);
+                      return (
+                        <li key={a.symbol} className="flex flex-col gap-1.5">
+                          <div className="flex flex-wrap items-baseline gap-2 text-sm">
+                            <strong>{a.symbol}</strong>
+                            <span className="text-muted-foreground">{a.name}</span>
+                            <span className={cn('flex items-center gap-1 font-semibold', d.text)}>
+                              <d.Icon className="size-3.5" aria-hidden />
+                              {t(`analysis.dir.${a.direction}`)}
+                            </span>
+                            <span>{t('analysis.confidence', { n: a.confidence })}</span>
+                          </div>
+                          <div
+                            className="h-1.5 max-w-xs overflow-hidden rounded-full bg-border"
+                            role="meter"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={a.confidence}
+                            aria-label={t('analysis.confidence', { n: a.confidence })}
+                          >
+                            <span className={cn('block h-full rounded-full', d.bar)} style={{ width: `${a.confidence}%` }} />
+                          </div>
+                          <p className="text-sm text-muted-foreground">{lang === 'th' ? a.rationaleTh : a.rationaleEn}</p>
+                          {call ? (
+                            <AssetOutcome call={call} />
+                          ) : (
+                            // Calls are being measured, but not this one: a stock or other asset without a USDT pair.
+                            outcomes != null && outcomes.size > 0 && <p className="text-xs text-muted-foreground">{t('analysis.outcome.unsupported')}</p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {newSources > 0 && (
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-warning">
+                    {t('analysis.stale', { n: newSources })}
+                    {canAnalyze && (
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => run(true)} disabled={busy}>
+                        {busy ? t('analysis.analyzing') : t('analysis.reanalyze')}
+                      </Button>
+                    )}
+                  </p>
+                )}
+                {error && <p className="text-sm text-danger">{t('analysis.error', { error })}</p>}
+              </section>
+
+              <ChartCompanionsPanel
+                subject="news"
+                at={news.publishedAt}
+                assets={assets}
+                companions={charts}
+                canRun={canAnalyze}
+                className="@3xl:pl-4"
+              />
+            </div>
+          </div>
 
           <footer className="text-xs text-muted-foreground">
             {showModel

@@ -1,4 +1,4 @@
-import { CircleCheck, ExternalLink, Info, Loader2, Minus, Sparkles, TrendingDown, TrendingUp, Waves } from 'lucide-react';
+import { CircleCheck, ExternalLink, Info, Loader2, Minus, Newspaper, Sparkles, TrendingDown, TrendingUp, Waves } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { MarketRunDetail, MarketStage, MarketStory, Sentiment } from '@/api/types';
+import { AssetOutcome, OutcomeScore, useAnalysisOutcomes } from '@/components/AnalysisOutcome';
+import { chartAssets, ChartCompanionsPanel, useChartCompanions } from '@/components/chart/ChartCompanions';
 import { AssetChip, DIRECTION } from '@/components/NewsAnalysisView';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
@@ -87,10 +89,22 @@ function StoryLinks({ ids, stories }: { ids: number[]; stories: Map<number, Mark
   );
 }
 
-/** A market brief: tone, summary, themes and affected assets, each with the stories behind it. */
+/**
+ * A market brief: tone, summary, themes and affected assets, each with the stories behind it — and next to it the
+ * chart call of the same assets (each read when asked for), made apart (no news in it) and checked on its own.
+ */
 export function MarketResultView({ run }: { run: MarketRunDetail }) {
   const { t, lang } = useI18n();
-  const showModel = useHealth()?.ui?.showModel !== false;
+  const health = useHealth();
+  const showModel = health?.ui?.showModel !== false;
+  const done = run.status === 'success' && run.result != null;
+  // A reused brief was judged as the run that made it.
+  const outcomes = useAnalysisOutcomes('market', run.reusedFromId ?? run.id, run.finishedAt ?? '', done);
+  const assets = done ? chartAssets(run.result!.assets) : [];
+  const chartAt = run.finishedAt ?? run.createdAt;
+  const charts = useChartCompanions(assets, chartAt, done);
+  const canRun = health?.ai.enabled ?? false;
+
   const sources = run.sourceIds.length ? run.sourceNames.join(', ') : t('market.allSources');
   const meta = t('market.meta', {
     window: t(`market.window.${run.window}`),
@@ -164,7 +178,13 @@ export function MarketResultView({ run }: { run: MarketRunDetail }) {
 
         {r.assets.length > 0 && (
           <section className="flex flex-col gap-3" aria-label={t('market.assets')}>
-            <h3 className="text-sm font-semibold">{t('market.assets')}</h3>
+            <header className="flex flex-wrap items-center gap-2">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+                <Newspaper className="size-4 text-primary" aria-hidden />
+                {t('market.assets')}
+              </h3>
+              {outcomes && <OutcomeScore calls={outcomes} />}
+            </header>
             <div className="flex flex-wrap gap-1.5">
               {r.assets.map((a) => (
                 <AssetChip key={a.symbol} asset={a} />
@@ -195,6 +215,7 @@ export function MarketResultView({ run }: { run: MarketRunDetail }) {
                       <span className={cn('block h-full rounded-full', d.bar)} style={{ width: `${a.confidence}%` }} />
                     </div>
                     <p className="text-sm text-muted-foreground">{lang === 'th' ? a.rationaleTh : a.rationaleEn}</p>
+                    {outcomes?.get(a.symbol) && <AssetOutcome call={outcomes.get(a.symbol)!} />}
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-muted-foreground">{t('market.evidence')}</span>
                       <StoryLinks ids={a.storyIds} stories={stories} />
@@ -206,6 +227,15 @@ export function MarketResultView({ run }: { run: MarketRunDetail }) {
           </section>
         )}
         {r.assets.length === 0 && <p className="text-sm text-muted-foreground">{t('analysis.noAssets')}</p>}
+
+        <ChartCompanionsPanel
+          subject="market"
+          at={chartAt}
+          assets={assets}
+          companions={charts}
+          canRun={canRun}
+          className="rounded-lg border border-primary/25 bg-surface-sunken p-4"
+        />
 
         {r.themes.length > 0 && (
           <section className="flex flex-col gap-3" aria-label={t('market.themes')}>

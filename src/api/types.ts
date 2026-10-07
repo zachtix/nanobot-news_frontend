@@ -120,21 +120,23 @@ export interface AnalysisAsset {
 }
 
 /** Kind of event a story is about (picked by the AI; used to compare outcomes of similar events). */
-export type EventType =
-  | 'hack_exploit'
-  | 'etf_fund_flows'
-  | 'regulation_legal'
-  | 'listing_delisting'
-  | 'token_unlock_supply'
-  | 'institutional_treasury'
-  | 'partnership_adoption'
-  | 'product_upgrade'
-  | 'exchange_business'
-  | 'stablecoin'
-  | 'macro_economy'
-  | 'mining_infrastructure'
-  | 'market_commentary'
-  | 'other';
+export const EVENT_TYPES = [
+  'hack_exploit',
+  'etf_fund_flows',
+  'regulation_legal',
+  'listing_delisting',
+  'token_unlock_supply',
+  'institutional_treasury',
+  'partnership_adoption',
+  'product_upgrade',
+  'exchange_business',
+  'stablecoin',
+  'macro_economy',
+  'mining_infrastructure',
+  'market_commentary',
+  'other',
+] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
 
 export interface NewsAnalysis {
   id: number;
@@ -504,8 +506,6 @@ export interface AiSettings {
   display: { showModel: boolean };
   /** Learning from outcomes. */
   learning: LearningSwitches;
-  /** Chart data (RSI, MACD, EMAs, divergences) sent with each analysis. */
-  chart: { enabled: boolean };
 }
 
 export interface LearningSwitches {
@@ -525,7 +525,6 @@ export interface AiSettingsPatch {
   prompts?: Partial<Record<PromptName, string | null>>;
   showModel?: boolean;
   learning?: Partial<LearningSwitches>;
-  chart?: { enabled?: boolean };
 }
 
 export type SettingsWarning =
@@ -580,10 +579,8 @@ export interface OutcomeSummary {
   byConfidence: OutcomeGroup[];
   byDirection: OutcomeGroup[];
   byAsset: OutcomeGroup[];
-  /** By the 4h chart setup when the call was made (a call can be in several groups). */
+  /** By the 4h chart setup when the call was made (a call can be in several groups). Shown only, never given to the AI. */
   byChartSetup: OutcomeGroup[];
-  /** Chart switch: the chart-setup groups go to the AI only when it is on. */
-  chart: boolean;
   /** What the AI is given right now; null when switched off or not enough data. */
   feedbackText: string | null;
 }
@@ -594,6 +591,8 @@ export interface PredictionView {
   sourceKey: number;
   newsId: number | null;
   title: string | null;
+  /** What the move is measured against (BTC for crypto, SPY for stocks), or null for the raw move. */
+  benchmark: string | null;
   symbol: string;
   assetType: string;
   direction: Direction;
@@ -647,6 +646,8 @@ export interface ChartCall {
 export interface ChartAnalysis {
   id: number;
   symbol: string;
+  /** crypto = exchange pair in USDT; anything else = a market ticker in USD (trading hours). */
+  assetType: AssetKind;
   pair: string;
   /** Only candles closed before this moment were used. */
   at: string;
@@ -677,6 +678,26 @@ export interface ChartAnalysis {
   moves: Record<ChartHorizon, number | null>;
   actual: Record<ChartHorizon, Direction | null>;
   verdicts: Record<ChartHorizon, 'hit' | 'miss' | null>;
+  /** Made with indexed prices (last close = 100), as analyses were before real prices were sent. */
+  indexed: boolean;
+}
+
+export type AssetKind = 'crypto' | 'stock' | 'index' | 'commodity' | 'fiat' | 'other';
+
+/** An asset to read the chart of. */
+export interface ChartAsset {
+  symbol: string;
+  assetType: AssetKind;
+}
+
+/** The chart call about an asset, shown next to a news or market call about it. Made from the chart only, no news. */
+export interface ChartCompanion {
+  symbol: string;
+  assetType: AssetKind;
+  /** null: not analysed yet, or it could not be (see `error`). */
+  analysis: ChartAnalysis | null;
+  /** No market on the exchange, too little history, or the AI call failed. */
+  error: string | null;
 }
 
 export type ChartMode = 'live' | 'backtest';

@@ -12,10 +12,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { api, describeError } from '@/api/client';
-import type { Horizon, OutcomeGroup, OutcomeSummary, Paginated, PredictionSource, PredictionView } from '@/api/types';
+import {
+  type Direction,
+  EVENT_TYPES,
+  type EventType,
+  type Horizon,
+  type OutcomeGroup,
+  type OutcomeSummary,
+  type Paginated,
+  type PredictionSource,
+  type PredictionStatus,
+  type PredictionView,
+} from '@/api/types';
 import { DataTable } from '@/components/DataTable';
 import { DIRECTION } from '@/components/NewsAnalysisView';
 import { Pagination, usePageSize } from '@/components/Pagination';
+import { ALL, TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
 import { useI18n } from '@/i18n/I18nContext';
 import type { MessageKey } from '@/i18n/messages';
 import { formatDateTime } from '@/utils/format';
@@ -130,7 +142,7 @@ export function AccuracyPage() {
         </>
       )}
 
-      <CallsCard source={source} reload={reload} />
+      <CallsCard source={source} reload={reload} assets={summary?.byAsset.map((g) => g.key) ?? []} />
     </div>
   );
 }
@@ -175,9 +187,9 @@ function GroupsCard({ summary }: { summary: OutcomeSummary }) {
       title: 'acc.by.chart',
       rows: summary.byChartSetup,
       label: (k) => t(`chart.setup.${k}` as MessageKey),
-      note: `${t('acc.chartNote')}${summary.chart ? '' : ` ${t('acc.chartOff')}`}`,
-      // The AI gets these groups only when it also sees the chart of the story.
-      toAi: summary.chart,
+      note: t('acc.chartNote'),
+      // The news AI never sees the chart, so these groups are for reading only.
+      toAi: false,
     },
   ];
 
@@ -311,16 +323,29 @@ function MoveCell({ move, verdict }: { move: number | null; verdict: 'hit' | 'mi
   );
 }
 
-function CallsCard({ source, reload }: { source: PredictionSource; reload: number }) {
+function CallsCard({ source, reload, assets }: { source: PredictionSource; reload: number; assets: string[] }) {
   const { t, lang } = useI18n();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = usePageSize('outcome-calls');
   const [data, setData] = useState<Paginated<PredictionView> | null>(null);
+  const list = useTableFilters({ symbol: ALL, direction: ALL, eventType: ALL, status: ALL });
 
-  useEffect(() => setPage(1), [source]);
+  useEffect(() => setPage(1), [source, list.key]);
   useEffect(() => {
-    api.outcomePredictions({ source, page, limit }).then(setData, () => setData({ items: [], total: 0, page, limit }));
-  }, [source, page, limit, reload]);
+    const f = list.filters;
+    api
+      .outcomePredictions({
+        source,
+        page,
+        limit,
+        q: list.q,
+        symbol: filterValue(f.symbol),
+        direction: filterValue<Direction>(f.direction),
+        eventType: filterValue<EventType>(f.eventType),
+        status: filterValue<PredictionStatus>(f.status),
+      })
+      .then(setData, () => setData({ items: [], total: 0, page, limit }));
+  }, [source, page, limit, list.q, list.filters, reload]);
 
   const story = useCallback(
     (p: PredictionView) => (p.source === 'market' ? t('acc.marketRun', { id: p.sourceKey }) : (p.title ?? `news#${p.newsId}`)),
@@ -336,7 +361,22 @@ function CallsCard({ source, reload }: { source: PredictionSource; reload: numbe
         size: 260,
         minSize: 160,
         meta: { grow: true },
-        cell: ({ row }) => <span title={story(row.original)}>{story(row.original)}</span>,
+        cell: ({ row: { original: p } }) => (
+          <span className="flex min-w-0 items-center gap-2">
+            {p.newsId != null && (
+              <Link
+                to={`/?q=${encodeURIComponent(`#${p.newsId}`)}`}
+                className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums hover:text-primary hover:underline"
+                title={t('acc.openNews')}
+              >
+                #{p.newsId}
+              </Link>
+            )}
+            <span className="truncate" title={story(p)}>
+              {story(p)}
+            </span>
+          </span>
+        ),
       },
       { id: 'asset', header: t('acc.col.asset'), size: 90, minSize: 76, cell: ({ row }) => <strong>{row.original.symbol}</strong> },
       {
@@ -394,10 +434,51 @@ function CallsCard({ source, reload }: { source: PredictionSource; reload: numbe
         <CardAction />
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {data && (data.total > 0 || list.active) && (
+          <TableToolbar
+            label={t('acc.callsTitle')}
+            search={{ value: list.search, onChange: list.setSearch, placeholder: t('acc.search') }}
+            filters={[
+              {
+                id: 'symbol',
+                label: t('news.filterAsset'),
+                allLabel: t('news.allAssets'),
+                options: [...assets].sort().map((s) => ({ value: s, label: s })),
+                value: list.filters.symbol,
+                onChange: list.set('symbol'),
+              },
+              {
+                id: 'direction',
+                label: t('news.filterDirection'),
+                allLabel: t('news.allDirections'),
+                options: (['up', 'down', 'neutral'] as const).map((d) => ({ value: d, label: t(`analysis.dir.${d}`) })),
+                value: list.filters.direction,
+                onChange: list.set('direction'),
+              },
+              {
+                id: 'eventType',
+                label: t('acc.filterEvent'),
+                allLabel: t('acc.allEvents'),
+                options: EVENT_TYPES.map((e) => ({ value: e, label: t(`event.${e}`) })),
+                value: list.filters.eventType,
+                onChange: list.set('eventType'),
+              },
+              {
+                id: 'status',
+                label: t('table.filterStatus'),
+                allLabel: t('table.allStatuses'),
+                options: (['pending', 'done', 'unsupported', 'error'] as const).map((s) => ({ value: s, label: t(`acc.status.${s}`) })),
+                value: list.filters.status,
+                onChange: list.set('status'),
+              },
+            ]}
+            onReset={list.reset}
+          />
+        )}
         {data === null ? (
           <Skeleton className="h-40" aria-label={t('common.loading')} />
         ) : data.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('acc.noCalls')}</p>
+          <p className="text-sm text-muted-foreground">{list.active ? t('table.noMatches') : t('acc.noCalls')}</p>
         ) : (
           <DataTable id="outcome-calls" label={t('acc.callsTitle')} columns={columns} data={data.items} getRowId={(p) => String(p.id)} />
         )}

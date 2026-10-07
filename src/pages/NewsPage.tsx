@@ -1,5 +1,6 @@
 import { Languages, Loader2, Newspaper, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,10 +25,13 @@ const ALL = 'all';
 export function NewsPage() {
   const { completedRun } = useFetchStatus();
   const { t } = useI18n();
-  const [search, setSearch] = useState('');
+  // `?q=#123` (e.g. from a #id link elsewhere) opens the page already searching for that story.
+  const [searchParams] = useSearchParams();
+  const [initialSearch] = useState(() => searchParams.get('q') ?? '');
+  const [search, setSearch] = useState(initialSearch);
   const debouncedSearch = useDebounced(search, 350);
   const [pageSize, setPageSize] = usePageSize('news');
-  const [query, setQuery] = useState<NewsQuery>({ page: 1, limit: pageSize, sort: 'latest' });
+  const [query, setQuery] = useState<NewsQuery>({ page: 1, limit: pageSize, sort: 'latest', q: initialSearch || undefined });
   const [data, setData] = useState<Paginated<News> | null>(null);
   const [stats, setStats] = useState<NewsStats | null>(null);
   const [sources, setSources] = useState<Source[]>([]);

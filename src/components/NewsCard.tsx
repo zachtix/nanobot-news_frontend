@@ -72,6 +72,7 @@ export function NewsCard({ news, canTranslate = false, canAnalyze = false, onUpd
         <CardContent className="flex flex-col-reverse gap-4 p-4 sm:flex-row sm:p-5">
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="font-mono tabular-nums select-all">#{news.id}</span>
               <time dateTime={news.publishedAt} title={formatDateTime(news.publishedAt, lang)}>
                 {timeAgo(news.publishedAt, lang)}
               </time>

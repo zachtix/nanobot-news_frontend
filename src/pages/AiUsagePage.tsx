@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { api, describeError } from '@/api/client';
@@ -28,6 +27,7 @@ import {
 import { DataTable } from '@/components/DataTable';
 import { Pagination, usePageSize } from '@/components/Pagination';
 import { PromptLogView } from '@/components/PromptLogView';
+import { TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
@@ -373,6 +373,19 @@ function DailyUsageCard({ daily, period }: { daily: DailyUsage[]; period: string
           getRowId={(d) => d.date}
           rowClassName={(row) => (row.original.calls === 0 ? 'text-muted-foreground/70' : undefined)}
           paginate
+          search={{ placeholder: t('ai.searchDate'), text: (d) => `${d.date} ${bucketText(d.date)}` }}
+          filters={[
+            {
+              id: 'activity',
+              label: t('ai.filterActivity'),
+              allLabel: t('ai.allBuckets'),
+              options: [
+                { value: 'with', label: t('ai.withCalls') },
+                { value: 'without', label: t('ai.withoutCalls') },
+              ],
+              value: (d) => (d.calls > 0 ? 'with' : 'without'),
+            },
+          ]}
         />
       }
     />
@@ -410,6 +423,7 @@ function ModelTable({ rows, daily, models, period }: { rows: ModelRow[]; daily: 
           getRowId={(m) => m.model}
           empty={t('ai.noCalls')}
           paginate
+          search={{ placeholder: t('ai.searchModel'), text: (m) => m.model }}
         />
       }
     />
@@ -473,20 +487,23 @@ function CallsTable({ refreshKey }: { refreshKey?: number }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = usePageSize('ai-calls');
   const [failedOnly, setFailedOnly] = useState(false);
-  const [purpose, setPurpose] = useState(ALL);
+  const list = useTableFilters({ purpose: ALL });
+  const purpose = list.filters.purpose;
   const [expanded, setExpanded] = useState<number | null>(null);
   const [data, setData] = useState<Paginated<AiUsageCall> | null>(null);
 
+  useEffect(() => setPage(1), [list.key]);
   useEffect(() => {
     api
       .aiUsageCalls({
         page,
         limit,
         success: failedOnly ? false : undefined,
-        purpose: purpose === ALL ? undefined : purpose,
+        purpose: filterValue(purpose),
+        q: list.q,
       })
       .then(setData, () => setData({ items: [], total: 0, page, limit }));
-  }, [page, limit, failedOnly, purpose, refreshKey]);
+  }, [page, limit, failedOnly, purpose, list.q, refreshKey]);
 
   const label = useCallback((p: string) => (PURPOSE_LABEL[p] ? t(PURPOSE_LABEL[p]) : p), [t]);
 
@@ -575,27 +592,29 @@ function CallsTable({ refreshKey }: { refreshKey?: number }) {
     <Card role="region" aria-label={t('ai.recent')}>
       <CardHeader>
         <CardTitle>{t('ai.recent')}</CardTitle>
-        <CardAction className="flex flex-wrap items-center gap-3">
-          <Select
-            value={purpose}
-            onValueChange={(v) => {
-              setPurpose(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger aria-label={t('ai.filterPurpose')} className="min-w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('ai.allPurposes')}</SelectItem>
-              {PURPOSES.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {label(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2">
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <TableToolbar
+          label={t('ai.recent')}
+          search={{ value: list.search, onChange: list.setSearch, placeholder: t('ai.searchCalls') }}
+          filters={[
+            {
+              id: 'purpose',
+              label: t('ai.filterPurpose'),
+              allLabel: t('ai.allPurposes'),
+              options: PURPOSES.map((p) => ({ value: p, label: label(p) })),
+              value: purpose,
+              onChange: list.set('purpose'),
+            },
+          ]}
+          active={failedOnly}
+          onReset={() => {
+            list.reset();
+            setFailedOnly(false);
+            setPage(1);
+          }}
+        >
+          <div className="flex items-center gap-2 px-1">
             <Checkbox
               id="failed-only"
               checked={failedOnly}
@@ -608,9 +627,7 @@ function CallsTable({ refreshKey }: { refreshKey?: number }) {
               {t('ai.failedOnly')}
             </Label>
           </div>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+        </TableToolbar>
         {data === null ? (
           <Skeleton className="h-40" aria-label={t('common.loading')} />
         ) : data.items.length === 0 ? (

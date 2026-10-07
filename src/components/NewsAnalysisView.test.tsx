@@ -1,9 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
-import type { NewsAnalysis } from '../api/types';
-import { makeNews, renderWithI18n } from '../test/utils';
+import type { NewsAnalysis, PredictionView } from '../api/types';
+import { makeChartAnalysis, makeNews, renderWithI18n } from '../test/utils';
 import { NewsCard } from './NewsCard';
 
 const analysis: NewsAnalysis = {
@@ -23,6 +23,11 @@ const analysis: NewsAnalysis = {
 };
 
 describe('AI analysis on a news card', () => {
+  beforeEach(() => {
+    // The chart side looks up its stored calls whenever the panel opens.
+    vi.spyOn(api, 'chartCompanions').mockResolvedValue([]);
+  });
+
   it('shows stored analysis as asset chips with direction and confidence — without calling the AI', async () => {
     const analyze = vi.spyOn(api, 'analyzeNews');
     renderWithI18n(<NewsCard news={makeNews({ analysis })} canAnalyze />, 'th');
@@ -90,5 +95,111 @@ describe('AI analysis on a news card', () => {
     renderWithI18n(<NewsCard news={makeNews({ analysis: { ...analysis, assets: [] } })} />, 'th');
     await userEvent.click(screen.getByRole('button', { name: 'ดูบทวิเคราะห์' }));
     expect(screen.getByText('ข่าวนี้ไม่ได้ส่งผลต่อสินทรัพย์ใดโดยตรง')).toBeInTheDocument();
+  });
+  it('shows how right the calls turned out once prices are in', async () => {
+    const call = (over: Partial<PredictionView>): PredictionView => ({
+      id: 1, source: 'analysis', sourceKey: 1, newsId: 1, title: null, benchmark: null, symbol: 'BTC', assetType: 'crypto',
+      direction: 'up', confidence: 65, eventType: null, model: analysis.model, baseTime: '2026-10-01T03:00:00.000Z',
+      status: 'done', error: null, setups: null,
+      moves: { '1h': 0.8, '4h': 1.4, '24h': -2.1 },
+      verdicts: { '1h': 'hit', '4h': 'hit', '24h': 'miss' },
+      ...over,
+    });
+    const list = vi.spyOn(api, 'outcomePredictions').mockResolvedValue({
+      items: [call({}), call({ id: 2, symbol: 'ETH', benchmark: 'BTC', direction: 'down', status: 'pending', moves: { '1h': -0.9, '4h': null, '24h': null }, verdicts: { '1h': 'hit', '4h': null, '24h': null } })],
+      total: 2, page: 1, limit: 50,
+    });
+    renderWithI18n(<NewsCard news={makeNews({ analysis })} />, 'th');
+    expect(list).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'ดูบทวิเคราะห์' }));
+    const panel = screen.getByRole('region', { name: 'บทวิเคราะห์ AI' });
+    expect(await within(panel).findByText('ทายถูก 3/4')).toBeInTheDocument();
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ source: 'analysis', q: '#1' }));
+
+    const btc = within(panel).getByLabelText('ผลจริงของ BTC');
+    expect(within(btc).getByText('ผลจริง')).toBeInTheDocument();
+    expect(within(btc).getByText('+0.8%')).toBeInTheDocument();
+    expect(within(btc).getByText('-2.1%')).toBeInTheDocument();
+    expect(within(btc).getAllByLabelText('ผิด')).toHaveLength(1);
+
+    const eth = within(panel).getByLabelText('ผลจริงของ ETH');
+    expect(within(eth).getByText('ผลจริง (เทียบ BTC)')).toBeInTheDocument();
+    expect(within(eth).getAllByText('รอผล')).toHaveLength(2);
+  });
+
+  describe('the chart side', () => {
+    const btcChart = makeChartAnalysis();
+    const crypto = (symbol: string) => ({ symbol, assetType: 'crypto' as const });
+    const withStock = {
+      ...analysis,
+      assets: [...analysis.assets, { id: 3, symbol: 'MSTR', name: 'Strategy', assetType: 'stock' as const, direction: 'up' as const, confidence: 55, rationaleTh: 'กำไรทางบัญชี', rationaleEn: 'Book gain' }],
+    };
+
+    it('does not read any chart by itself after the news is analysed', async () => {
+      vi.spyOn(api, 'analyzeNews').mockResolvedValue({ analysis, cached: false });
+      const runCharts = vi.spyOn(api, 'runChartCompanions');
+      const { rerender } = renderWithI18n(<NewsCard news={makeNews({ analysis: null })} canAnalyze onUpdated={(n) => rerender(<NewsCard news={n} canAnalyze />)} />, 'th');
+      await userEvent.click(screen.getByRole('button', { name: /วิเคราะห์ด้วย AI/ }));
+      expect(await screen.findByRole('region', { name: 'วิเคราะห์จากกราฟ' })).toBeInTheDocument();
+      expect(runCharts).not.toHaveBeenCalled();
+    });
+
+    it('offers every asset of the story, stock included, and reads only the one picked — apart from the news side', async () => {
+      vi.spyOn(api, 'outcomePredictions').mockResolvedValue({ items: [], total: 0, page: 1, limit: 50 });
+      const list = vi.spyOn(api, 'chartCompanions').mockResolvedValue([
+        { ...crypto('BTC'), analysis: null, error: null },
+        { ...crypto('ETH'), analysis: null, error: null },
+        { symbol: 'MSTR', assetType: 'stock', analysis: null, error: null },
+      ]);
+      const runCharts = vi.spyOn(api, 'runChartCompanions').mockResolvedValue([{ ...crypto('BTC'), analysis: btcChart, error: null }]);
+      const news = makeNews({ analysis: withStock });
+      renderWithI18n(<NewsCard news={news} canAnalyze />, 'th');
+
+      await userEvent.click(screen.getByRole('button', { name: 'ดูบทวิเคราะห์' }));
+      const chartSide = screen.getByRole('region', { name: 'วิเคราะห์จากกราฟ' });
+      expect(await within(chartSide).findByRole('button', { name: 'วิเคราะห์กราฟ MSTR' })).toBeInTheDocument();
+      expect(list).toHaveBeenCalledWith([crypto('BTC'), crypto('ETH'), { symbol: 'MSTR', assetType: 'stock' }], news.publishedAt);
+
+      await userEvent.click(within(chartSide).getByRole('button', { name: 'วิเคราะห์กราฟ BTC' }));
+      const btc = await within(chartSide).findByRole('listitem', { name: 'กราฟ BTC' });
+      // Only the asset and the moment go to the chart side.
+      expect(runCharts).toHaveBeenCalledTimes(1);
+      expect(runCharts).toHaveBeenCalledWith([crypto('BTC')], news.publishedAt);
+      expect(within(btc).getByText('ราคา ณ ตอนวิเคราะห์ 62,000 USDT')).toBeInTheDocument();
+      expect(within(btc).getByText('64,000')).toBeInTheDocument(); // resistance in real prices
+      expect(within(btc).getByText('-3.2%')).toBeInTheDocument();
+      expect(within(btc).getByRole('link', { name: /ดูกราฟเต็ม/ })).toHaveAttribute('href', '/chart?analysis=7');
+      expect(within(chartSide).getByText('ทายถูก 2/3')).toBeInTheDocument();
+      // The others are still there to pick.
+      expect(within(chartSide).getByRole('button', { name: 'วิเคราะห์กราฟ ETH' })).toBeInTheDocument();
+      expect(within(chartSide).getByRole('button', { name: 'วิเคราะห์กราฟ MSTR' })).toBeInTheDocument();
+
+      const newsSide = screen.getByRole('region', { name: 'วิเคราะห์จากข่าว' });
+      expect(within(newsSide).queryByText('ทายถูก 2/3')).not.toBeInTheDocument();
+    });
+
+    it('says why an asset has no chart, and offers nothing to run without an AI key', async () => {
+      vi.spyOn(api, 'outcomePredictions').mockResolvedValue({ items: [], total: 0, page: 1, limit: 50 });
+      vi.spyOn(api, 'chartCompanions').mockResolvedValue([
+        { ...crypto('BTC'), analysis: btcChart, error: null },
+        { ...crypto('ETH'), analysis: null, error: 'Not enough ETH price history' },
+        { symbol: 'MSTR', assetType: 'stock', analysis: null, error: null },
+      ]);
+      renderWithI18n(<NewsCard news={makeNews({ analysis: withStock })} />, 'th');
+      await userEvent.click(screen.getByRole('button', { name: 'ดูบทวิเคราะห์' }));
+      const chartSide = screen.getByRole('region', { name: 'วิเคราะห์จากกราฟ' });
+      expect(await within(chartSide).findByText('ไม่มีกราฟ (Not enough ETH price history)')).toBeInTheDocument();
+      expect(within(within(chartSide).getByRole('listitem', { name: 'กราฟ MSTR' })).getByText('ยังไม่ได้วิเคราะห์กราฟ')).toBeInTheDocument();
+      expect(within(chartSide).queryByRole('button', { name: /วิเคราะห์กราฟ/ })).not.toBeInTheDocument();
+    });
+
+    it('notes the index on analyses made before real prices were sent', async () => {
+      vi.spyOn(api, 'outcomePredictions').mockResolvedValue({ items: [], total: 0, page: 1, limit: 50 });
+      vi.spyOn(api, 'chartCompanions').mockResolvedValue([{ ...crypto('BTC'), analysis: makeChartAnalysis({ indexed: true }), error: null }]);
+      renderWithI18n(<NewsCard news={makeNews({ analysis })} />, 'th');
+      await userEvent.click(screen.getByRole('button', { name: 'ดูบทวิเคราะห์' }));
+      expect(await screen.findByText(/ตอนที่ยังส่งราคาเป็นดัชนี: ตัวเลขในข้อความ 100 = 62,000/)).toBeInTheDocument();
+    });
   });
 });

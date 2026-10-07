@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 import { api } from '../api/client';
-import type { FetchRun, FetchStatus, News, NewsReference, Source } from '../api/types';
+import type { ChartAnalysis, FetchRun, FetchStatus, News, NewsReference, Source } from '../api/types';
 import { Layout } from '../components/Layout';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { FetchStatusProvider } from '../context/FetchStatusContext';
@@ -100,6 +100,45 @@ export function makeRun(overrides: Partial<FetchRun> = {}): FetchRun {
   };
 }
 
+/** A judged chart call: right at 4h and 24h, wrong at 3d. */
+export function makeChartAnalysis(overrides: Partial<ChartAnalysis> = {}): ChartAnalysis {
+  return {
+    id: 7,
+    symbol: 'BTC',
+    assetType: 'crypto',
+    pair: 'BTCUSDT',
+    at: '2026-09-30T08:00:00.000Z',
+    backtest: true,
+    batchId: null,
+    model: 'google/gemini-3.8-flash',
+    trend: 'up',
+    summaryTh: 'ยืนเหนือ EMA50 แต่ติดแนวต้าน',
+    summaryEn: 'Above the EMA50 but under resistance.',
+    signals: [],
+    supports: [60_000],
+    resistances: [64_000],
+    calls: { '4h': { direction: 'neutral', confidence: 40 }, '24h': { direction: 'up', confidence: 55 }, '3d': { direction: 'up', confidence: 50 } },
+    thresholds: { '4h': 0.3, '24h': 0.9, '3d': 1.6 },
+    lastClose: 62_000,
+    input: 'COIN: BTC',
+    cost: 0.003,
+    promptTokens: 1200,
+    completionTokens: 600,
+    status: 'done',
+    basePrice: 62_000,
+    price4h: 62_050,
+    price24h: 63_000,
+    price3d: 60_000,
+    error: null,
+    createdAt: '2026-10-07T03:00:00.000Z',
+    moves: { '4h': 0.08, '24h': 1.61, '3d': -3.23 },
+    actual: { '4h': 'neutral', '24h': 'up', '3d': 'down' },
+    verdicts: { '4h': 'hit', '24h': 'hit', '3d': 'miss' },
+    indexed: false,
+    ...overrides,
+  };
+}
+
 export const idleStatus: FetchStatus = { running: false, run: null, lastRun: null };
 
 /** Stub every endpoint the shell (layout + status polling) touches. */
@@ -131,13 +170,15 @@ export function renderPage(page: ReactElement, { path = '/', activePollMs = 20, 
   );
 }
 
-/** Render a single component with only the i18n provider. */
+/** Render a single component with only the i18n provider (and a router for its links). */
 export function renderWithI18n(ui: ReactElement, lang: Lang = 'th') {
   // `wrapper` (not wrapping `ui`) so `rerender` keeps the providers.
   return render(ui, {
     wrapper: ({ children }) => (
       <UiProviders>
-        <I18nProvider defaultLang={lang}>{children}</I18nProvider>
+        <I18nProvider defaultLang={lang}>
+          <MemoryRouter>{children}</MemoryRouter>
+        </I18nProvider>
       </UiProviders>
     ),
   });

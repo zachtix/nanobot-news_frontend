@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import type { OutcomeSummary, PredictionView } from '../api/types';
-import { mockShellApi, renderPage } from '../test/utils';
+import { chooseOption, mockShellApi, renderPage } from '../test/utils';
 import { AccuracyPage } from './AccuracyPage';
 
 const FEEDBACK = 'TRACK RECORD of your earlier per-story calls, checked against real prices.\nOverall: all calls → 55% right (n=40).';
@@ -28,7 +28,6 @@ const summary = (overrides: Partial<OutcomeSummary> = {}): OutcomeSummary => ({
   byDirection: [{ key: 'up', n: 30, hits: 14, hitRate: 46.7, avgMove: -0.4, reliable: true }],
   byAsset: [{ key: 'BTC', n: 12, hits: 7, hitRate: 58.3, avgMove: 0.8, reliable: false }],
   byChartSetup: [{ key: 'rsi_oversold', n: 21, hits: 14, hitRate: 66.7, avgMove: 1.9, reliable: true }],
-  chart: false,
   feedbackText: FEEDBACK,
   ...overrides,
 });
@@ -39,6 +38,7 @@ const call = (overrides: Partial<PredictionView> = {}): PredictionView => ({
   sourceKey: 412,
   newsId: 412,
   title: 'Exchange hacked for $40M',
+  benchmark: 'BTC',
   symbol: 'ETH',
   assetType: 'crypto',
   direction: 'down',
@@ -106,25 +106,17 @@ describe('AccuracyPage', () => {
     expect(within(screen.getByRole('table', { name: 'สินทรัพย์' })).getByText('ATOM')).toBeInTheDocument();
   });
 
-  it('groups by chart setup, and marks those groups as sent to the AI only when chart data is on', async () => {
+  it('groups by chart setup for reading only (never sent to the AI)', async () => {
     const user = userEvent.setup();
-    const { unmount } = renderPage(<AccuracyPage />, { path: '/accuracy' });
+    renderPage(<AccuracyPage />, { path: '/accuracy' });
     await screen.findByRole('table', { name: 'ประเภทเหตุการณ์' });
     await user.click(screen.getByRole('tab', { name: 'สภาพกราฟ' }));
     const table = screen.getByRole('table', { name: 'สภาพกราฟ' });
     const row = within(table).getByText('RSI ต่ำกว่า 30 (ขายมากเกินไป)').closest('tr')!;
     expect(within(row).getByText('+1.9%')).toBeInTheDocument();
-    expect(within(row).queryByRole('img', { name: 'ส่งให้ AI' })).not.toBeInTheDocument(); // chart switch off
-    expect(screen.getByText(/ยังไม่ได้ส่งให้ AI — เปิด "ส่งข้อมูลกราฟให้ AI" ในหน้าตั้งค่า/)).toBeInTheDocument();
-    unmount();
-
-    vi.mocked(api.outcomeSummary).mockResolvedValue(summary({ chart: true }));
-    renderPage(<AccuracyPage />, { path: '/accuracy' });
-    await screen.findByRole('table', { name: 'ประเภทเหตุการณ์' });
-    await user.click(screen.getByRole('tab', { name: 'สภาพกราฟ' }));
-    const on = within(screen.getByRole('table', { name: 'สภาพกราฟ' })).getByText('RSI ต่ำกว่า 30 (ขายมากเกินไป)').closest('tr')!;
-    expect(within(on).getByRole('img', { name: 'ส่งให้ AI' })).toBeInTheDocument();
-    expect(screen.queryByText(/ยังไม่ได้ส่งให้ AI/)).not.toBeInTheDocument();
+    // The news AI never sees the chart: these groups are for reading only.
+    expect(within(row).queryByRole('img', { name: 'ส่งให้ AI' })).not.toBeInTheDocument();
+    expect(screen.getByText(/ใช้ดูอย่างเดียว ไม่ได้ส่งให้ AI/)).toBeInTheDocument();
   });
 
   it('says when nothing is sent yet, or when the switches are off', async () => {
@@ -159,4 +151,24 @@ describe('AccuracyPage', () => {
     expect(refresh).toHaveBeenCalled();
     await waitFor(() => expect(vi.mocked(api.outcomeSummary).mock.calls.length).toBeGreaterThanOrEqual(3));
   });
+
+  it('searches and filters the calls on the server, and links each call to its story', async () => {
+    const user = userEvent.setup();
+    renderPage(<AccuracyPage />, { path: '/accuracy' });
+    const section = await screen.findByRole('region', { name: 'คำทำนายแต่ละรายการ' });
+    const link = await within(section).findByRole('link', { name: '#412' });
+    expect(link).toHaveAttribute('href', '/?q=%23412');
+
+    await user.type(within(section).getByRole('searchbox'), '#5');
+    await waitFor(() => expect(api.outcomePredictions).toHaveBeenLastCalledWith(expect.objectContaining({ q: '#5', page: 1 })));
+
+    await chooseOption(user, within(section).getByRole('combobox', { name: 'กรองตามประเภทข่าว' }), 'แฮก / ช่องโหว่');
+    await waitFor(() =>
+      expect(api.outcomePredictions).toHaveBeenLastCalledWith(expect.objectContaining({ q: '#5', eventType: 'hack_exploit' })),
+    );
+
+    await user.click(within(section).getByRole('button', { name: 'ล้างตัวกรอง' }));
+    await waitFor(() => expect(api.outcomePredictions).toHaveBeenLastCalledWith(expect.objectContaining({ q: undefined, eventType: undefined })));
+  });
 });
+

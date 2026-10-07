@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { api } from '../api/client';
 import type { MarketPreview, MarketRun, MarketRunDetail } from '../api/types';
-import { makeSource, mockShellApi, renderPage } from '../test/utils';
+import { makeChartAnalysis, makeSource, mockShellApi, renderPage } from '../test/utils';
 import { MarketPage } from './MarketPage';
 
 const preview = (overrides: Partial<MarketPreview> = {}): MarketPreview => ({
@@ -77,6 +77,8 @@ describe('MarketPage', () => {
   let previewSpy: MockInstance<typeof api.marketPreview>;
   let runsSpy: MockInstance<typeof api.marketRuns>;
   let runSpy: MockInstance<typeof api.marketRun>;
+  let chartsSpy: MockInstance<typeof api.chartCompanions>;
+  let runChartsSpy: MockInstance<typeof api.runChartCompanions>;
 
   beforeEach(() => {
     mockShellApi();
@@ -88,6 +90,14 @@ describe('MarketPage', () => {
     previewSpy = vi.spyOn(api, 'marketPreview').mockResolvedValue(preview());
     runsSpy = vi.spyOn(api, 'marketRuns').mockResolvedValue({ items: [runRow()], total: 1, page: 1, limit: 10 });
     runSpy = vi.spyOn(api, 'marketRun').mockResolvedValue(detail());
+    vi.spyOn(api, 'outcomePredictions').mockResolvedValue({ items: [], total: 0, page: 1, limit: 50 });
+    chartsSpy = vi.spyOn(api, 'chartCompanions').mockResolvedValue([
+      { symbol: 'BTC', assetType: 'crypto', analysis: null, error: null },
+      { symbol: 'ETH', assetType: 'crypto', analysis: null, error: null },
+    ]);
+    runChartsSpy = vi.spyOn(api, 'runChartCompanions').mockResolvedValue([
+      { symbol: 'ETH', assetType: 'crypto', analysis: makeChartAnalysis({ id: 8, symbol: 'ETH', pair: 'ETHUSDT', verdicts: { '4h': 'miss', '24h': null, '3d': null } }), error: null },
+    ]);
   });
 
   it('shows the latest brief: tone, summary, assets with confidence and the stories behind them', async () => {
@@ -110,6 +120,46 @@ describe('MarketPage', () => {
     const themes = within(result).getByRole('region', { name: 'ประเด็นสำคัญ' });
     expect(within(themes).getByText('แรงหนุน ETF')).toBeInTheDocument();
     expect(within(result).getByText(/ค่าใช้จ่าย \$0\.020478/)).toBeInTheDocument();
+
+    // The chart side is looked up, never analysed just by opening it: each asset is picked on its own.
+    const chart = within(result).getByRole('region', { name: 'วิเคราะห์จากกราฟ' });
+    expect(await within(chart).findByRole('button', { name: 'วิเคราะห์กราฟ BTC' })).toBeInTheDocument();
+    const btcEth = [{ symbol: 'BTC', assetType: 'crypto' }, { symbol: 'ETH', assetType: 'crypto' }];
+    expect(chartsSpy).toHaveBeenCalledWith(btcEth, '2026-10-01T07:44:45.000Z');
+    expect(runChartsSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(within(chart).getByRole('button', { name: 'วิเคราะห์กราฟ ETH' }));
+    expect(await within(chart).findByRole('listitem', { name: 'กราฟ ETH' })).toBeInTheDocument();
+    expect(runChartsSpy).toHaveBeenCalledWith([{ symbol: 'ETH', assetType: 'crypto' }], '2026-10-01T07:44:45.000Z');
+    expect(within(chart).getByRole('button', { name: 'วิเคราะห์กราฟ BTC' })).toBeInTheDocument();
+  });
+
+  it('shows how the brief’s calls turned out, apart from the chart’s', async () => {
+    const outcomes = vi.spyOn(api, 'outcomePredictions').mockResolvedValue({
+      items: [
+        {
+          id: 1, source: 'market', sourceKey: 2, newsId: null, title: null, benchmark: 'BTC', symbol: 'ETH', assetType: 'crypto',
+          direction: 'down', confidence: 55, eventType: null, model: 'm', baseTime: '2026-10-01T07:44:45.000Z', status: 'done', error: null,
+          setups: null, moves: { '1h': -0.9, '4h': -1.2, '24h': 0.4 }, verdicts: { '1h': 'hit', '4h': 'hit', '24h': 'miss' },
+        },
+      ],
+      total: 1, page: 1, limit: 50,
+    });
+    chartsSpy.mockResolvedValue([
+      { symbol: 'BTC', assetType: 'crypto', analysis: makeChartAnalysis(), error: null },
+      { symbol: 'ETH', assetType: 'crypto', analysis: null, error: null },
+    ]);
+    renderPage(<MarketPage />, { path: '/market' });
+
+    const result = await screen.findByRole('region', { name: 'ผลวิเคราะห์ #2' });
+    const assets = within(result).getByRole('region', { name: 'สินทรัพย์ที่ได้รับผลกระทบ' });
+    expect(await within(assets).findByText('ทายถูก 2/3')).toBeInTheDocument();
+    expect(within(assets).getByLabelText('ผลจริงของ ETH')).toBeInTheDocument();
+    expect(outcomes).toHaveBeenCalledWith(expect.objectContaining({ source: 'market', q: '#2' }));
+
+    const chart = within(result).getByRole('region', { name: 'วิเคราะห์จากกราฟ' });
+    expect(await within(chart).findByRole('listitem', { name: 'กราฟ BTC' })).toBeInTheDocument();
+    expect(within(chart).getByText('ทายถูก 2/3')).toBeInTheDocument();
   });
 
   it('shows the first 3 supporting stories and the rest on demand', async () => {
@@ -178,6 +228,9 @@ describe('MarketPage', () => {
 
     expect(await screen.findByText('Bitcoin ติดแนวต้าน $85,000', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(screen.getByText(/วิเคราะห์รายข่าวเพิ่ม 73 ข่าว/)).toBeInTheDocument();
+    // Even a brief that finished in front of the user reads no chart until an asset is picked.
+    expect(await screen.findByRole('button', { name: 'วิเคราะห์กราฟ ETH' })).toBeInTheDocument();
+    expect(runChartsSpy).not.toHaveBeenCalled();
     // The run's own setup is remembered for next time.
     expect(JSON.parse(localStorage.getItem('market:setup')!)).toMatchObject({ window: '1d', sourceIds: [2], analyzeMissing: true });
   });

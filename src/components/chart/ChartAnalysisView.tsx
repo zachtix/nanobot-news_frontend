@@ -87,7 +87,7 @@ export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: C
     // Up to the end of the longest horizon (or now), so a past call shows what happened next.
     const before = new Date(Math.min(Date.now(), until + 2 * INTERVAL_MS[timeframe])).toISOString();
     let live = true;
-    api.chartCandles(a.symbol, timeframe, before).then(
+    api.chartCandles(a.symbol, timeframe, before, a.assetType).then(
       (cs) => {
         if (!live) return;
         const first = cs.findIndex((c) => c.openTime >= at);
@@ -98,7 +98,7 @@ export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: C
     return () => {
       live = false;
     };
-  }, [a.symbol, at, until, timeframe]);
+  }, [a.symbol, a.assetType, at, until, timeframe]);
 
   const marks = useMemo<HorizonMark[]>(
     () =>
@@ -164,8 +164,8 @@ export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: C
 
       <div className="flex flex-col gap-1">
         <p className="leading-relaxed">{summary}</p>
-        {/* The AI only saw indexed prices, so the numbers it writes are on that scale. */}
-        <p className="text-xs text-muted-foreground">{t('chart.indexNote', { price: formatPrice(a.lastClose) })}</p>
+        {/* Older analyses only saw indexed prices, so the numbers they write are on that scale. */}
+        {a.indexed && <p className="text-xs text-muted-foreground">{t('chart.indexNote', { price: formatPrice(a.lastClose) })}</p>}
       </div>
 
       {a.signals.length > 0 && (
@@ -201,7 +201,9 @@ export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: C
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <p className="mb-2 text-xs text-muted-foreground">{t('chart.inputHelp', { price: formatPrice(a.lastClose) })}</p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            {a.indexed ? t('chart.inputHelp', { price: formatPrice(a.lastClose) }) : t('chart.inputHelpReal')}
+          </p>
           <pre className="max-h-80 overflow-auto rounded-md bg-surface-sunken p-3 text-xs leading-relaxed whitespace-pre-wrap">{a.input}</pre>
         </CollapsibleContent>
       </Collapsible>

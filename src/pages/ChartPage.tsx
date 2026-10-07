@@ -1,5 +1,6 @@
 import { Loader2, ScanLine } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +37,25 @@ export function ChartPage() {
   const [reload, setReload] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
   const lastDone = useRef(0);
+  // ?analysis=<id>: opened from a news or market call to see that coin's chart in full.
+  const [params] = useSearchParams();
+  const linked = Number(params.get('analysis')) || null;
+
+  useEffect(() => {
+    if (!linked) return;
+    let live = true;
+    api.chartAnalysis(linked).then(
+      (analysis) => {
+        if (!live) return;
+        setSymbol(analysis.symbol);
+        setResult({ analysis, cached: false });
+      },
+      (err) => live && setError(describeError(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [linked]);
 
   const aiOff = health ? !health.ai.enabled : false;
 

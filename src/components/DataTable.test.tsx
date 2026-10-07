@@ -236,4 +236,47 @@ describe('DataTable', () => {
     expect(screen.getByText('Symbol 1')).toBeInTheDocument();
     expect(within(screen.getByRole('alertdialog')).getByText('Delete BTC?')).toBeInTheDocument();
   });
+
+  it('searches and filters rows on the client, back to page 1, and clears both', async () => {
+    const user = userEvent.setup();
+    const many: Coin[] = [...coins, { symbol: 'SOL', name: 'Solana', price: 150 }];
+    renderWithI18n(
+      <DataTable
+        id="t-filter"
+        label="Coins"
+        columns={columns()}
+        data={many}
+        getRowId={(c) => c.symbol}
+        search={{ placeholder: 'Search coins', text: (c) => `${c.symbol} ${c.name}` }}
+        filters={[
+          {
+            id: 'price',
+            label: 'Price band',
+            allLabel: 'Any price',
+            options: [
+              { value: 'cheap', label: 'Under 1000' },
+              { value: 'dear', label: '1000 and up' },
+            ],
+            value: (c) => (c.price < 1000 ? 'cheap' : 'dear'),
+          },
+        ]}
+      />,
+    );
+    const rows = () => within(screen.getByRole('table', { name: 'Coins' })).getAllByRole('row').slice(1);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search coins' }), 'eth');
+    expect(rows().map((r) => r.textContent)).toEqual([expect.stringContaining('Ethereum')]);
+
+    await user.clear(screen.getByRole('searchbox', { name: 'Search coins' }));
+    await chooseOption(user, screen.getByRole('combobox', { name: 'Price band' }), '1000 and up');
+    expect(rows()).toHaveLength(2);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search coins' }), 'sol');
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent('ไม่พบรายการที่ตรงกับการค้นหา/ตัวกรอง');
+
+    await user.click(screen.getByRole('button', { name: 'ล้างตัวกรอง' }));
+    expect(rows()).toHaveLength(3);
+    expect(screen.getByRole('searchbox', { name: 'Search coins' })).toHaveValue('');
+  });
 });

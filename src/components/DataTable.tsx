@@ -8,10 +8,11 @@ import {
   type RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DEFAULT_PAGE_SIZE, Pagination, usePageSize } from '@/components/Pagination';
+import { ALL, type FilterOption, TableToolbar } from '@/components/TableToolbar';
 import { useI18n } from '@/i18n/I18nContext';
 
 declare module '@tanstack/react-table' {
@@ -37,6 +38,15 @@ function loadSizing(id: string): ColumnSizingState {
   } catch {
     return {};
   }
+}
+
+/** A client-side filter select: rows whose `value` equals the chosen option are kept. */
+export interface ClientFilter<T> {
+  id: string;
+  label: string;
+  allLabel: string;
+  options: FilterOption[];
+  value: (row: T) => string;
 }
 
 interface DataTableProps<T> {
@@ -65,6 +75,13 @@ interface DataTableProps<T> {
    * server-paged lists leave this off and render <Pagination> next to the table instead.
    */
   paginate?: boolean | { defaultPageSize?: number };
+  /**
+   * Client-side search box above the table: rows whose `text` contains the query (any case) are kept.
+   * For server-paged lists filter on the server and render <TableToolbar> yourself instead.
+   */
+  search?: { placeholder: string; text: (row: T) => string };
+  /** Client-side filter selects shown next to the search box. */
+  filters?: ClientFilter<T>[];
 }
 
 /** A row click that belongs to something else: a control inside the row, or the end of a text selection. */
@@ -112,8 +129,22 @@ export function DataTable<T>({
   empty,
   className,
   paginate,
+  search,
+  filters,
 }: DataTableProps<T>) {
   const { t } = useI18n();
+  const [query, setQuery] = useState('');
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const active = (filters ?? []).filter((f) => (chosen[f.id] ?? ALL) !== ALL);
+    if (!needle && active.length === 0) return data;
+    return data.filter(
+      (row) =>
+        (!needle || (search?.text(row) ?? '').toLowerCase().includes(needle)) && active.every((f) => f.value(row) === chosen[f.id]),
+    );
+  }, [data, query, chosen, filters, search]);
+  const filtering = shown !== data;
   const [sizing, setSizing] = useState<ColumnSizingState>(() => loadSizing(id));
   const [pageSize, setPageSize] = usePageSize(id, (typeof paginate === 'object' && paginate.defaultPageSize) || DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
@@ -122,7 +153,7 @@ export function DataTable<T>({
   const [containerWidth, setContainerWidth] = useState(0);
 
   const table = useReactTable({
-    data,
+    data: shown,
     columns,
     getRowId,
     getCoreRowModel: getCoreRowModel(),
@@ -241,10 +272,10 @@ export function DataTable<T>({
           ))}
         </TableHeader>
         <TableBody>
-          {rows.length === 0 && empty ? (
+          {rows.length === 0 && (empty || filtering) ? (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={leafColumns.length} className="h-20 text-center text-muted-foreground">
-                {empty}
+                {filtering ? t('table.noMatches') : empty}
               </TableCell>
             </TableRow>
           ) : (
@@ -313,9 +344,34 @@ export function DataTable<T>({
     </div>
   );
 
+  const onFilterChange = (apply: () => void) => {
+    apply();
+    setPage(1);
+  };
+  const toolbar =
+    search || filters?.length ? (
+      <TableToolbar
+        label={label}
+        className="mb-3"
+        search={search && { value: query, onChange: (v) => onFilterChange(() => setQuery(v)), placeholder: search.placeholder }}
+        filters={(filters ?? []).map((f) => ({
+          ...f,
+          value: chosen[f.id] ?? ALL,
+          onChange: (v: string) => onFilterChange(() => setChosen((c) => ({ ...c, [f.id]: v }))),
+        }))}
+        onReset={() =>
+          onFilterChange(() => {
+            setQuery('');
+            setChosen({});
+          })
+        }
+      />
+    ) : null;
+
   if (!paginate) {
     return (
       <div className={className}>
+        {toolbar}
         {grid}
         {scrollbar}
       </div>
@@ -323,6 +379,7 @@ export function DataTable<T>({
   }
   return (
     <div className={className}>
+      {toolbar}
       {grid}
       {scrollbar}
       <Pagination

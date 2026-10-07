@@ -10,6 +10,7 @@ import type { FetchRun, Paginated } from '@/api/types';
 import { RunStatusBadge } from '@/components/Badges';
 import { DataTable } from '@/components/DataTable';
 import { Pagination, usePageSize } from '@/components/Pagination';
+import { ALL, TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime, formatDuration, formatNumber } from '@/utils/format';
@@ -24,10 +25,15 @@ export function RunHistory() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const activeRun = status?.running ? status.run : null;
   const runs = data?.items ?? null;
+  const list = useTableFilters({ trigger: ALL, status: ALL });
 
+  useEffect(() => setPage(1), [list.key]);
   useEffect(() => {
-    api.listRuns({ page, limit }).then(setData, () => setData({ items: [], total: 0, page, limit }));
-  }, [page, limit, completedRun?.id, activeRun?.id, activeRun?.fetched]);
+    const { trigger, status } = list.filters;
+    api
+      .listRuns({ page, limit, q: list.q, trigger: filterValue<FetchRun['trigger']>(trigger), status: filterValue<FetchRun['status']>(status) })
+      .then(setData, () => setData({ items: [], total: 0, page, limit }));
+  }, [page, limit, list.q, list.filters, completedRun?.id, activeRun?.id, activeRun?.fetched]);
 
   const columns = useMemo<ColumnDef<FetchRun, unknown>[]>(() => {
     const num = (id: keyof FetchRun, header: string, size = 92): ColumnDef<FetchRun, unknown> => ({
@@ -113,11 +119,39 @@ export function RunHistory() {
       <CardHeader>
         <CardTitle>{t('runs.title')}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-3">
+        {data && (data.total > 0 || list.active) && (
+          <TableToolbar
+            label={t('runs.title')}
+            search={{ value: list.search, onChange: list.setSearch, placeholder: t('runs.search') }}
+            filters={[
+              {
+                id: 'trigger',
+                label: t('runs.filterTrigger'),
+                allLabel: t('runs.allTriggers'),
+                options: [
+                  { value: 'manual', label: t('runs.manual') },
+                  { value: 'schedule', label: t('runs.schedule') },
+                ],
+                value: list.filters.trigger,
+                onChange: list.set('trigger'),
+              },
+              {
+                id: 'status',
+                label: t('table.filterStatus'),
+                allLabel: t('table.allStatuses'),
+                options: (['success', 'partial', 'failed', 'running'] as const).map((s) => ({ value: s, label: t(`run.${s}`) })),
+                value: list.filters.status,
+                onChange: list.set('status'),
+              },
+            ]}
+            onReset={list.reset}
+          />
+        )}
         {runs === null ? (
           <Skeleton className="h-40" aria-label={t('common.loading')} />
         ) : runs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('runs.empty')}</p>
+          <p className="text-sm text-muted-foreground">{list.active ? t('table.noMatches') : t('runs.empty')}</p>
         ) : (
           <DataTable
             id="fetch-runs"

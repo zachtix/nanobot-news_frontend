@@ -31,6 +31,7 @@ const AT = '2026-10-01T09:00:00.000Z';
 const analysis = (overrides: Partial<ChartAnalysis> = {}): ChartAnalysis => ({
   id: 7,
   symbol: 'SOL',
+  assetType: 'crypto',
   pair: 'SOLUSDT',
   at: AT,
   backtest: true,
@@ -59,6 +60,7 @@ const analysis = (overrides: Partial<ChartAnalysis> = {}): ChartAnalysis => ({
   moves: { '4h': 0.2, '24h': 2, '3d': 2.67 },
   actual: { '4h': 'neutral', '24h': 'up', '3d': 'neutral' },
   verdicts: { '4h': 'hit', '24h': 'hit', '3d': 'miss' },
+  indexed: false,
   ...overrides,
 });
 
@@ -146,7 +148,7 @@ describe('ChartPage', () => {
     }
     await user.click(within(result).getByRole('button', { name: 'ข้อมูลที่ส่งให้ AI' }));
     expect(within(result).getByText(/last close = 100\.00/)).toBeInTheDocument();
-    expect(api.chartCandles).toHaveBeenCalledWith('SOL', '4h', expect.any(String));
+    expect(api.chartCandles).toHaveBeenCalledWith('SOL', '4h', expect.any(String), 'crypto');
 
     // Drawn with TradingView's chart: both levels as price lines, a marker where each horizon ends.
     await waitFor(() => expect(lw.priceLines).toEqual(expect.arrayContaining([
@@ -155,7 +157,7 @@ describe('ChartPage', () => {
     ])));
     expect(lw.markers.map((m) => m.text)).toEqual(expect.arrayContaining(['4ชม ✓', '24ชม ✓', '3วัน ✗']));
     await user.click(within(result).getByRole('radio', { name: '1 วัน' }));
-    await waitFor(() => expect(api.chartCandles).toHaveBeenLastCalledWith('SOL', '1d', expect.any(String)));
+    await waitFor(() => expect(api.chartCandles).toHaveBeenLastCalledWith('SOL', '1d', expect.any(String), 'crypto'));
   }, 20_000); // many clicks through the calendar: slow when the whole suite runs in parallel
 
   it('a cached result says so and offers a paid re-run', async () => {

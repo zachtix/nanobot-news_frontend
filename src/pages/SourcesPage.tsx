@@ -207,6 +207,36 @@ export function SourcesPage() {
           getRowId={(s) => String(s.id)}
           rowClassName={(row) => (row.original.enabled ? undefined : 'text-muted-foreground')}
           paginate
+          search={{ placeholder: t('sources.search'), text: (s) => `${s.name} ${s.url}` }}
+          filters={[
+            {
+              id: 'type',
+              label: t('sources.filterType'),
+              allLabel: t('sources.allTypes'),
+              options: [
+                { value: 'rss', label: 'RSS' },
+                { value: 'html', label: 'HTML' },
+              ],
+              value: (s) => s.type,
+            },
+            {
+              id: 'enabled',
+              label: t('sources.filterEnabled'),
+              allLabel: t('sources.allEnabled'),
+              options: [
+                { value: 'on', label: t('sources.enabledOn') },
+                { value: 'off', label: t('sources.enabledOff') },
+              ],
+              value: (s) => (s.enabled ? 'on' : 'off'),
+            },
+            {
+              id: 'health',
+              label: t('sources.filterHealth'),
+              allLabel: t('sources.allHealth'),
+              options: (['ok', 'error', 'never'] as const).map((h) => ({ value: h, label: t(`sources.health.${h}`) })),
+              value: (s) => (s.lastStatus === 'ok' || s.lastStatus === 'error' ? s.lastStatus : 'never'),
+            },
+          ]}
         />
       )}
 

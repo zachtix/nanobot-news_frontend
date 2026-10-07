@@ -107,7 +107,6 @@ export function SettingsPage() {
       )}
       <ModelCard settings={settings} save={save} />
       <LearningCard settings={settings} save={save} />
-      <ChartCard settings={settings} save={save} />
       <DisplayCard settings={settings} save={save} />
       <PromptsCard settings={settings} save={save} />
     </div>
@@ -269,36 +268,6 @@ function LearningCard({ settings, save }: { settings: AiSettings; save: SaveFn }
         {row('tracking')}
         <Separator />
         {row('feedback')}
-        <NoticeLine notice={saver.notice} />
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Chart data for the AI: one switch, saved as soon as it is flipped. Off by default. */
-function ChartCard({ settings, save }: { settings: AiSettings; save: SaveFn }) {
-  const { t } = useI18n();
-  const saver = useSaver(save);
-  return (
-    <Card role="region" aria-label={t('settings.chart.title')}>
-      <CardHeader>
-        <CardTitle>{t('settings.chart.title')}</CardTitle>
-        <CardDescription>{t('settings.chart.help')}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col gap-0.5">
-            <Label htmlFor="chart-enabled">{t('settings.chart.enabled')}</Label>
-            <p className="text-sm text-muted-foreground">{t('settings.chart.enabledHelp')}</p>
-          </div>
-          <Switch
-            id="chart-enabled"
-            checked={settings.chart.enabled}
-            disabled={saver.busy}
-            onCheckedChange={(checked) => saver.run({ chart: { enabled: checked } })}
-            aria-label={t('settings.chart.enabled')}
-          />
-        </div>
         <NoticeLine notice={saver.notice} />
       </CardContent>
     </Card>
