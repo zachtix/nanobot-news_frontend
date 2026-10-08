@@ -20,7 +20,7 @@ import { TableToolbar, filterValue, useTableFilters } from '@/components/TableTo
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useHealth } from '@/context/HealthContext';
-import { useCreditPrices } from '@/lib/credits';
+import { gasErrorText, useCreditPrices } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime } from '@/utils/format';
 
@@ -308,7 +308,8 @@ function SelectedRun({ id, onFinished }: { id: number | null; onFinished: () => 
         if (cancelled) return;
         setRun(r);
         setError(null);
-        if (r.status === 'running') {
+        // Also while a customer's GAS charge is being confirmed (each look retries it with the same request).
+        if (r.status === 'running' || r.charge?.status === 'pending') {
           wasRunning = true;
           timer = setTimeout(load, POLL_MS);
         } else if (wasRunning) {
@@ -342,6 +343,18 @@ function SelectedRun({ id, onFinished }: { id: number | null; onFinished: () => 
     );
   }
   if (!run) return <Skeleton className="h-80 rounded-xl" aria-label={t('common.loading')} />;
+  if (run.status === 'success' && run.charge && run.charge.status !== 'paid') {
+    return (
+      <Card className="items-center gap-2 py-12 text-center" role="status">
+        {run.charge.status === 'pending' ? <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden /> : <Info className="size-8 text-danger" aria-hidden />}
+        <p className="max-w-md text-sm">
+          {run.charge.status === 'pending'
+            ? t('market.charging', { n: run.charge.credits })
+            : t('market.chargeFailed', { error: gasErrorText(t, run.charge.error ?? 'UNKNOWN') })}
+        </p>
+      </Card>
+    );
+  }
   return <MarketResultView run={run} />;
 }
 

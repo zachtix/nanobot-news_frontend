@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AssetOutcome, OutcomeScore, useAnalysisOutcomes } from '@/components/AnalysisOutcome';
 import { chartAssets, ChartCompanionsPanel, useChartCompanions } from '@/components/chart/ChartCompanions';
-import { api, describeError } from '@/api/client';
+import { api } from '@/api/client';
 import type { AnalysisAsset, Direction, News, NewsAnalysis } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useHealth } from '@/context/HealthContext';
-import { useCreditPrices } from '@/lib/credits';
+import { useCreditPrices, useErrorText } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatDateTime } from '@/utils/format';
 
@@ -79,6 +79,7 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
   const { user } = useAuth();
   const staff = user?.isStaff ?? false;
   const prices = useCreditPrices();
+  const errorText = useErrorText();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +97,7 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
       onAnalyzed(result.analysis);
       setOpen(true);
     } catch (err) {
-      setError(describeError(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }

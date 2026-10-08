@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api, describeError } from '@/api/client';
+import { api } from '@/api/client';
 import type { AssetKind, ChartAnalysis, ChartAsset, ChartCompanion } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
-import { useCreditPrices } from '@/lib/credits';
+import { useCreditPrices, useErrorText } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatDateTime } from '@/utils/format';
 import { CallChip, CHART_HORIZONS, Verdict } from './ChartAnalysisView';
@@ -33,12 +33,13 @@ const keyOf = (a: ChartAsset) => `${a.assetType}:${a.symbol}`;
  */
 export function useChartCompanions(assets: ChartAsset[], at: string | null, enabled: boolean, newsId?: number) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const key = at && assets.length ? `${assets.map(keyOf).join(',')}@${at}` : null;
   const [state, setState] = useState<{ key: string; items: ChartCompanion[] } | null>(null);
   const [busy, setBusy] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const latest = useRef({ assets, at, key, newsId, t });
-  latest.current = { assets, at, key, newsId, t };
+  const latest = useRef({ assets, at, key, newsId, t, errorText });
+  latest.current = { assets, at, key, newsId, t, errorText };
 
   useEffect(() => {
     if (!enabled || !key || !at || state?.key === key) return;
@@ -72,7 +73,7 @@ export function useChartCompanions(assets: ChartAsset[], at: string | null, enab
         });
       }
     } catch (err) {
-      setError(describeError(err));
+      setError(latest.current.errorText(err));
     } finally {
       setBusy((b) => {
         const next = new Set(b);

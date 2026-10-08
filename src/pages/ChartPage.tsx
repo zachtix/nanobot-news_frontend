@@ -18,7 +18,7 @@ import { useHealth } from '@/context/HealthContext';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
-import { useCreditPrices } from '@/lib/credits';
+import { useCreditPrices, useErrorText } from '@/lib/credits';
 
 const QUICK = ['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE'];
 
@@ -41,6 +41,7 @@ export function ChartPage() {
   // re-runs, accuracy and backtests are for administrators.
   const staff = useAuth().user?.isStaff ?? false;
   const price = useCreditPrices().chart;
+  const errorText = useErrorText();
   const [reload, setReload] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
   const lastDone = useRef(0);
@@ -76,7 +77,7 @@ export function ChartPage() {
       setResult(res);
       setReload((n) => n + 1);
     } catch (err) {
-      setError(describeError(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }

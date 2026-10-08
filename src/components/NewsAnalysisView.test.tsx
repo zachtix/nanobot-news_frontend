@@ -212,6 +212,13 @@ describe('AI analysis on a news card', () => {
       expect(analyze).not.toHaveBeenCalled();
     });
 
+    it('says in words when the wallet refuses the charge', async () => {
+      vi.spyOn(api, 'analyzeNews').mockRejectedValue(new ApiError(402, 'Not enough GAS', { code: 'E2001' }));
+      renderWithI18n(<NewsCard news={makeNews({ analysis: null, analysisLocked: true })} canAnalyze />, 'th', customerUser);
+      await userEvent.click(screen.getByRole('button', { name: 'ดูผลวิเคราะห์ · 1 เครดิต' }));
+      expect(await screen.findByText('วิเคราะห์ไม่สำเร็จ: GAS ที่ใช้ได้ไม่เพียงพอ — เติม GAS แล้วกดใหม่ได้')).toBeInTheDocument();
+    });
+
     it('offers a new analysis for a credit and says what it cost', async () => {
       const analyze = vi.spyOn(api, 'analyzeNews').mockResolvedValue({ analysis, cached: false, credits: 1 });
       const onUpdated = vi.fn();

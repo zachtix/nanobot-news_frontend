@@ -293,4 +293,11 @@ describe('MarketPage', () => {
     expect(start).toHaveBeenCalledWith(expect.objectContaining({ refresh: true, analyzeMissing: false }));
     expect(screen.queryByRole('columnheader', { name: 'ค่าใช้จ่าย' })).not.toBeInTheDocument();
   });
+
+  it('shows a customer why their brief is not shown when the GAS charge was refused', async () => {
+    runSpy.mockResolvedValue(detail({ result: null, headlineTh: null, headlineEn: null, charge: { status: 'failed', credits: 10, error: 'E2001' } }));
+    renderPage(<MarketPage />, { path: '/market?run=2', user: customerUser });
+    expect(await screen.findByText(/ตัดเครดิตไม่สำเร็จ จึงยังแสดงผลไม่ได้: GAS ที่ใช้ได้ไม่เพียงพอ/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'ผลวิเคราะห์ #2' })).not.toBeInTheDocument();
+  });
 });

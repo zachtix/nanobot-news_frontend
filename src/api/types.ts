@@ -476,6 +476,16 @@ export interface MarketRunDetail extends MarketRun {
   storyIds: number[];
   /** The stories cited by the result. */
   stories: MarketStory[];
+  /** A customer's own brief: its GAS charge (the result shows once paid). */
+  charge?: MarketCharge;
+}
+
+export interface MarketCharge {
+  /** pending = not charged yet (still running, or the outcome is being confirmed); failed = refused. */
+  status: 'pending' | 'paid' | 'failed';
+  credits: number;
+  /** The wallet's error code when refused (e.g. E2001: not enough GAS). */
+  error: string | null;
 }
 
 export interface MarketPreview {
