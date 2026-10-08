@@ -9,28 +9,32 @@ import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/context/AuthContext';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import type { MessageKey } from '@/i18n/messages';
+import { AccountMenu } from './AccountMenu';
 import { FetchNowButton } from './FetchNowButton';
 import { LanguageMenu } from './LanguageMenu';
 import { ThemeToggle } from './ThemeToggle';
 
-const NAV: { to: string; label: MessageKey; end?: boolean }[] = [
+/** `staff`: administrators only (ROOT / SENIOR / ADMIN); customers see the news, market and chart pages. */
+const NAV: { to: string; label: MessageKey; end?: boolean; staff?: boolean }[] = [
   { to: '/', label: 'nav.news', end: true },
   { to: '/market', label: 'nav.market' },
   { to: '/chart', label: 'nav.chart' },
-  { to: '/sources', label: 'nav.sources' },
-  { to: '/ai-usage', label: 'nav.aiUsage' },
-  { to: '/accuracy', label: 'nav.accuracy' },
-  { to: '/settings', label: 'nav.settings' },
+  { to: '/sources', label: 'nav.sources', staff: true },
+  { to: '/ai-usage', label: 'nav.aiUsage', staff: true },
+  { to: '/accuracy', label: 'nav.accuracy', staff: true },
+  { to: '/settings', label: 'nav.settings', staff: true },
 ];
 
 export function Layout() {
   const { completedRun, error, clearError } = useFetchStatus();
   const { t } = useI18n();
   const health = useHealth();
+  const staff = useAuth().user?.isStaff ?? false;
 
   useEffect(() => {
     if (!completedRun) return;
@@ -71,7 +75,7 @@ export function Layout() {
             Nano Analysis
           </div>
           <nav className="flex flex-wrap gap-1" aria-label="main">
-            {NAV.map((item) => (
+            {NAV.filter((item) => staff || !item.staff).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -100,7 +104,9 @@ export function Layout() {
                 </TooltipContent>
               </Tooltip>
             )}
-            <FetchNowButton />
+            {/* Fetching news now is for administrators. */}
+            {staff && <FetchNowButton />}
+            <AccountMenu />
           </div>
         </div>
       </header>

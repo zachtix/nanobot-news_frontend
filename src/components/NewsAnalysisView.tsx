@@ -1,5 +1,7 @@
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Loader2, Newspaper, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Loader2, LogIn, Newspaper, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,7 +10,9 @@ import { AssetOutcome, OutcomeScore, useAnalysisOutcomes } from '@/components/An
 import { chartAssets, ChartCompanionsPanel, useChartCompanions } from '@/components/chart/ChartCompanions';
 import { api, describeError } from '@/api/client';
 import type { AnalysisAsset, Direction, News, NewsAnalysis } from '@/api/types';
+import { useAuth } from '@/context/AuthContext';
 import { useHealth } from '@/context/HealthContext';
+import { useCreditPrices } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatDateTime } from '@/utils/format';
 
@@ -40,6 +44,20 @@ export function AssetChip({ asset }: { asset: Pick<AnalysisAsset, 'symbol' | 'na
   );
 }
 
+/** Nobody signed in: sign in first, then come back to this page. */
+function SignInButton() {
+  const { t } = useI18n();
+  const location = useLocation();
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <Link to="/login" state={{ from: location.pathname }}>
+        <LogIn aria-hidden />
+        {t('analysis.signIn')}
+      </Link>
+    </Button>
+  );
+}
+
 interface Props {
   news: News;
   /** AI key configured: allows creating (or re-running) an analysis. */
@@ -48,7 +66,9 @@ interface Props {
 }
 
 /**
- * Chips + collapsible panel for a stored analysis, or the auto tags and the button that creates one.
+ * Chips + collapsible panel for an analysis this viewer may see, or the auto tags and the button that gets one:
+ * administrators analyse for free; a customer unlocks it (the stored one, or a new one for the first to ask);
+ * nobody signed in is asked to sign in.
  * The panel puts the news call and the chart call of the same assets side by side; they are made apart
  * (neither AI sees the other's input) and each is checked against the price on its own. The chart of each
  * asset is read only when the reader asks for it.
@@ -56,19 +76,23 @@ interface Props {
 export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
   const { t, lang } = useI18n();
   const showModel = useHealth()?.ui?.showModel !== false;
+  const { user } = useAuth();
+  const staff = user?.isStaff ?? false;
+  const prices = useCreditPrices();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const analysis = news.analysis ?? null;
   const outcomes = useAnalysisOutcomes('analysis', news.id, analysis?.createdAt ?? '', open && analysis != null);
   const assets = analysis ? chartAssets(analysis.assets) : [];
-  const charts = useChartCompanions(assets, news.publishedAt, open && analysis != null);
+  const charts = useChartCompanions(assets, news.publishedAt, open && analysis != null, news.id);
 
   const run = async (force: boolean) => {
     setBusy(true);
     setError(null);
     try {
       const result = await api.analyzeNews(news.id, force);
+      if (result.credits > 0) toast.success(t('credits.used', { n: result.credits }));
       onAnalyzed(result.analysis);
       setOpen(true);
     } catch (err) {
@@ -80,7 +104,9 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
 
   if (!analysis) {
     const tags = news.tags ?? [];
-    if (!canAnalyze && !error && tags.length === 0) return null;
+    // A stored analysis can be unlocked even with the AI off; a new one needs it.
+    const offer = news.analysisLocked || canAnalyze;
+    if (!offer && !error && tags.length === 0) return null;
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         {tags.length > 0 && (
@@ -92,12 +118,19 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
             ))}
           </span>
         )}
-        {canAnalyze && (
-          <Button variant="outline" size="sm" onClick={() => run(false)} disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-            {busy ? t('analysis.analyzing') : t('analysis.analyze')}
-          </Button>
-        )}
+        {offer &&
+          (!user ? (
+            <SignInButton />
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => run(false)} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+              {busy
+                ? t('analysis.analyzing')
+                : staff
+                  ? t('analysis.analyze')
+                  : t(news.analysisLocked ? 'analysis.unlockStored' : 'analysis.unlockNew', { n: prices.news })}
+            </Button>
+          ))}
         {error && <span className="text-sm text-danger">{t('analysis.error', { error })}</span>}
       </div>
     );
@@ -194,7 +227,7 @@ export function NewsAnalysisView({ news, canAnalyze, onAnalyzed }: Props) {
                 {newSources > 0 && (
                   <p className="flex flex-wrap items-center gap-2 text-sm text-warning">
                     {t('analysis.stale', { n: newSources })}
-                    {canAnalyze && (
+                    {canAnalyze && staff && (
                       <Button variant="link" size="sm" className="h-auto p-0" onClick={() => run(true)} disabled={busy}>
                         {busy ? t('analysis.analyzing') : t('analysis.reanalyze')}
                       </Button>

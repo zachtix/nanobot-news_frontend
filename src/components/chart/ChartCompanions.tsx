@@ -1,12 +1,15 @@
 import { CircleCheck, CircleX, Clock, ExternalLink, LineChart, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, describeError } from '@/api/client';
 import type { AssetKind, ChartAnalysis, ChartAsset, ChartCompanion } from '@/api/types';
+import { useAuth } from '@/context/AuthContext';
+import { useCreditPrices } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatDateTime } from '@/utils/format';
 import { CallChip, CHART_HORIZONS, Verdict } from './ChartAnalysisView';
@@ -25,16 +28,17 @@ const keyOf = (a: ChartAsset) => `${a.assetType}:${a.symbol}`;
 
 /**
  * The chart calls of these assets as of a news / market call's moment. Only the assets and the moment are sent:
- * the chart analysis never sees the news, and the news analysis never sees the chart. Each asset is analysed only
- * when asked for (every analysis is paid for).
+ * the chart analysis never sees the news, and the news analysis never sees the chart. Each asset is analysed (or, for a
+ * customer, unlocked) only when asked for: every analysis is paid for. `newsId` = the story whose moment it is.
  */
-export function useChartCompanions(assets: ChartAsset[], at: string | null, enabled: boolean) {
+export function useChartCompanions(assets: ChartAsset[], at: string | null, enabled: boolean, newsId?: number) {
+  const { t } = useI18n();
   const key = at && assets.length ? `${assets.map(keyOf).join(',')}@${at}` : null;
   const [state, setState] = useState<{ key: string; items: ChartCompanion[] } | null>(null);
   const [busy, setBusy] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const latest = useRef({ assets, at, key });
-  latest.current = { assets, at, key };
+  const latest = useRef({ assets, at, key, newsId, t });
+  latest.current = { assets, at, key, newsId, t };
 
   useEffect(() => {
     if (!enabled || !key || !at || state?.key === key) return;
@@ -50,15 +54,16 @@ export function useChartCompanions(assets: ChartAsset[], at: string | null, enab
     // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for assets + at
   }, [enabled, key, state?.key]);
 
-  /** Analyse one asset's chart (one AI call, unless it was read before) and put it in its place. */
+  /** Analyse or unlock one asset's chart (one AI call, unless it was read before) and put it in its place. */
   const run = useCallback(async (asset: ChartAsset) => {
-    const { at: moment, key: k } = latest.current;
+    const { at: moment, key: k, newsId: story, t: tr } = latest.current;
     if (!moment || !k) return;
     const id = keyOf(asset);
     setBusy((b) => new Set(b).add(id));
     setError(null);
     try {
-      const [got] = await api.runChartCompanions([{ symbol: asset.symbol, assetType: asset.assetType }], moment);
+      const { items: [got], credits } = await api.runChartCompanions([{ symbol: asset.symbol, assetType: asset.assetType }], moment, story);
+      if (credits > 0) toast.success(tr('credits.used', { n: credits }));
       if (got) {
         setState((s) => {
           const items = s?.key === k ? s.items : [];
@@ -112,6 +117,7 @@ function CompanionCard({ a }: { a: ChartAnalysis }) {
       <div className="flex flex-wrap items-center gap-2">
         <strong>{a.symbol}</strong>
         <Badge variant="outline">{t(`chart.trend.${a.trend}`)}</Badge>
+        {/* Anyone who sees the call may open it on the chart page (a customer: the ones they unlocked). */}
         <Button variant="link" size="xs" className="ml-auto h-auto p-0" asChild>
           <Link to={`/chart?analysis=${a.id}`}>
             {t('companion.open')}
@@ -168,7 +174,7 @@ interface PanelProps {
   /** Assets of the call (empty: it names none). */
   assets: ChartAsset[];
   companions: ReturnType<typeof useChartCompanions>;
-  /** AI key set: assets without a chart call can be analysed. */
+  /** AI key set: assets without a chart call can be analysed (a locked one can be unlocked either way). */
   canRun: boolean;
   className?: string;
 }
@@ -176,6 +182,8 @@ interface PanelProps {
 /** The chart side of a news / market call: its own calls and its own right/wrong, apart from the news side. */
 export function ChartCompanionsPanel({ subject, at, assets, companions, canRun, className }: PanelProps) {
   const { t, lang } = useI18n();
+  const staff = useAuth().user?.isStaff ?? false;
+  const prices = useCreditPrices();
   const { items, busy, error, run } = companions;
   const done = (items ?? []).flatMap((c) => (c.analysis ? [c.analysis] : []));
   const open = (items ?? []).filter((c) => !c.analysis);
@@ -216,10 +224,14 @@ export function ChartCompanionsPanel({ subject, at, assets, companions, canRun, 
                     <strong>{c.symbol}</strong>
                     {c.error ? (
                       <span className="text-xs text-muted-foreground">{t('companion.unavailable', { error: c.error })}</span>
-                    ) : canRun ? (
+                    ) : canRun || c.locked ? (
                       <Button variant="outline" size="sm" onClick={() => run(c)} disabled={running}>
                         {running ? <Loader2 className="animate-spin" aria-hidden /> : <LineChart aria-hidden />}
-                        {running ? t('companion.running') : t('companion.run', { symbol: c.symbol })}
+                        {running
+                          ? t('companion.running')
+                          : staff
+                            ? t('companion.run', { symbol: c.symbol })
+                            : t('companion.unlock', { symbol: c.symbol, n: prices.chart })}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">{t('companion.notYet')}</span>

@@ -13,6 +13,7 @@ import { api, describeError } from '@/api/client';
 import type { AssetOption, Direction, News, NewsQuery, NewsStats, Paginated, Source, TranslationStatus } from '@/api/types';
 import { NewsCard } from '@/components/NewsCard';
 import { Pagination, usePageSize } from '@/components/Pagination';
+import { useAuth } from '@/context/AuthContext';
 import { useFetchStatus } from '@/context/FetchStatusContext';
 import { useHealth } from '@/context/HealthContext';
 import { useI18n } from '@/i18n/I18nContext';
@@ -37,6 +38,9 @@ export function NewsPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const health = useHealth();
+  // Which analyses show (and what the analysis filters match) depends on who is signed in.
+  const { user, status: authStatus } = useAuth();
+  const viewerKey = authStatus === 'loading' ? null : (user?.id ?? '');
   const canAnalyze = health?.analysis?.enabled ?? false;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,9 +59,12 @@ export function NewsPage() {
   const loadAssets = useCallback(() => {
     api.newsAssets().then(setAssets, () => setAssets([]));
   }, []);
-  useEffect(loadAssets, [loadAssets]);
+  useEffect(() => {
+    if (viewerKey !== null) loadAssets();
+  }, [loadAssets, viewerKey]);
 
   useEffect(() => {
+    if (viewerKey === null) return; // wait to know who is signed in
     let cancelled = false;
     setLoading(true);
     Promise.all([api.listNews(query), api.newsStats()])
@@ -72,7 +79,7 @@ export function NewsPage() {
     return () => {
       cancelled = true;
     };
-  }, [query, completedRun?.id, reloadKey]);
+  }, [query, completedRun?.id, reloadKey, viewerKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const translation = useTranslationStatus(completedRun?.id, reload);
@@ -139,17 +146,20 @@ export function NewsPage() {
             ...assets.map((a) => ({ value: a.symbol, label: `${a.symbol} · ${a.name} (${a.count})` })),
           ]}
         />
-        <FilterSelect
-          label={t('news.filterDirection')}
-          value={query.direction ?? ALL}
-          onChange={(v) => update({ direction: v === ALL ? undefined : (v as Direction) })}
-          options={[
-            { value: ALL, label: t('news.allDirections') },
-            { value: 'up', label: `▲ ${t('analysis.dir.up')}` },
-            { value: 'down', label: `▼ ${t('analysis.dir.down')}` },
-            { value: 'neutral', label: `▬ ${t('analysis.dir.neutral')}` },
-          ]}
-        />
+        {/* Directions come from analyses: a customer filters the ones they unlocked; nobody signed in has none. */}
+        {user && (
+          <FilterSelect
+            label={t('news.filterDirection')}
+            value={query.direction ?? ALL}
+            onChange={(v) => update({ direction: v === ALL ? undefined : (v as Direction) })}
+            options={[
+              { value: ALL, label: t('news.allDirections') },
+              { value: 'up', label: `▲ ${t('analysis.dir.up')}` },
+              { value: 'down', label: `▼ ${t('analysis.dir.down')}` },
+              { value: 'neutral', label: `▬ ${t('analysis.dir.neutral')}` },
+            ]}
+          />
+        )}
         <div className="flex items-center gap-2 px-1">
           <Checkbox
             id="multi-only"

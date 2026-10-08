@@ -20,10 +20,11 @@ export function useAnalysisOutcomes(source: PredictionSource, id: number, versio
   useEffect(() => {
     if (!enabled || state?.key === key) return;
     let cancelled = false;
-    api
-      .outcomePredictions({ source, q: `#${id}`, page: 1, limit: 50 })
-      .then((res) => {
-        if (!cancelled) setState({ key, calls: new Map(res.items.map((p) => [p.symbol, p])) });
+    // With the access of the story / brief itself (a customer's own); a reused brief has its original's calls.
+    const load = source === 'analysis' ? api.newsOutcomes(id) : api.marketOutcomes(id);
+    load
+      .then((items) => {
+        if (!cancelled) setState({ key, calls: new Map(items.map((p) => [p.symbol, p])) });
       })
       .catch(() => {
         // The track record is extra information: the analysis stays readable without it.

@@ -91,8 +91,10 @@ export interface News {
   translatedAt: string | null;
   /** Assets tagged automatically when the story was fetched (no direction). */
   tags?: NewsTag[];
-  /** Stored AI analysis; null until someone analyses the story. */
+  /** Stored AI analysis, when this viewer may see it (administrators, or a customer who unlocked it). */
   analysis?: NewsAnalysis | null;
+  /** An analysis exists but this viewer has not unlocked it (`analysis` is null). */
+  analysisLocked?: boolean;
   createdAt: string;
   updatedAt: string;
   references: NewsReference[];
@@ -347,6 +349,22 @@ export interface SchedulerStatus {
   running: boolean;
 }
 
+/** A Nanobot member account (signed in on the Nanobot member API). */
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  /** Upper-cased, e.g. USER, ADMIN, SENIOR, ROOT. */
+  role: string;
+  /** ROOT / SENIOR / ADMIN: may open the settings, news sources and AI usage pages. */
+  isStaff: boolean;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string | null;
+}
+
 export interface Health {
   status: string;
   ai: { enabled: boolean; provider?: LlmProvider; model: string };
@@ -356,6 +374,14 @@ export interface Health {
   tagging?: { enabled: boolean };
   /** Display preferences set on the settings page. */
   ui?: { showModel: boolean };
+  /** Credits a customer pays per unlock (administrators never pay). */
+  credits?: CreditPrices;
+}
+
+export interface CreditPrices {
+  news: number;
+  chart: number;
+  market: number;
 }
 
 export interface TranslationStatus {
@@ -698,6 +724,8 @@ export interface ChartCompanion {
   analysis: ChartAnalysis | null;
   /** No market on the exchange, too little history, or the AI call failed. */
   error: string | null;
+  /** A chart call exists but this viewer has not unlocked it (`analysis` is null). */
+  locked?: boolean;
 }
 
 export type ChartMode = 'live' | 'backtest';

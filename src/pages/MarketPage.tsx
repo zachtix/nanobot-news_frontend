@@ -17,7 +17,10 @@ import { DataTable } from '@/components/DataTable';
 import { MarketResultView } from '@/components/market/MarketResultView';
 import { Pagination, usePageSize } from '@/components/Pagination';
 import { TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { useHealth } from '@/context/HealthContext';
+import { useCreditPrices } from '@/lib/credits';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime } from '@/utils/format';
 
@@ -82,7 +85,11 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
   const { t } = useI18n();
   const health = useHealth();
   const aiOn = health?.ai.enabled ?? false;
-  const [setup, setSetup] = useState<Setup>(loadSetup);
+  // Customers pay per brief and always run on fresh news (no options); administrators pick the options for free.
+  const staff = useAuth().user?.isStaff ?? false;
+  const price = useCreditPrices().market;
+  const [stored, setSetup] = useState<Setup>(loadSetup);
+  const setup: Setup = staff ? stored : { ...stored, refresh: true, analyzeMissing: false };
   const [sources, setSources] = useState<Source[]>([]);
   const [preview, setPreview] = useState<MarketPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -132,7 +139,9 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
     setBusy(true);
     setError(null);
     try {
-      onStarted(await api.startMarket({ ...setup, sourceIds: validIds, analyzeMissing: setup.analyzeMissing && (preview?.missingCount ?? 0) > 0 }));
+      const run = await api.startMarket({ ...setup, sourceIds: validIds, analyzeMissing: setup.analyzeMissing && (preview?.missingCount ?? 0) > 0 });
+      if (run.credits > 0) toast.info(t('market.creditsOnDone', { n: run.credits }));
+      onStarted(run);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -184,6 +193,7 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
           </ToggleGroup>
         </div>
 
+        {staff && (
         <div className="flex flex-col gap-3">
           <div className="flex items-start gap-2">
             <Checkbox id="market-refresh" checked={setup.refresh} onCheckedChange={(c) => update({ refresh: c === true })} className="mt-0.5" />
@@ -220,6 +230,7 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
             </div>
           </div>
         </div>
+        )}
 
         <div className="flex flex-col gap-1.5 rounded-lg border bg-surface-sunken/40 p-3 text-sm" aria-live="polite" data-testid="market-preview">
           {previewError ? (
@@ -237,7 +248,11 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
               )}
               {preview.truncatedCount > 0 && <span className="text-xs text-warning">{t('market.truncated', { n: preview.truncatedCount })}</span>}
               {preview.storyCount === 0 && <span className="text-xs text-muted-foreground">{t('market.noStories')}</span>}
-              <span className="tabular-nums">{t('market.estimate', { cost: formatCredit(estimate) })}</span>
+              {staff ? (
+                <span className="tabular-nums">{t('market.estimate', { cost: formatCredit(estimate) })}</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">{t('market.freshNews')}</span>
+              )}
               {preview.cached && (
                 <span className="flex items-start gap-1.5 text-xs text-info">
                   <Recycle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -263,7 +278,7 @@ function SetupCard({ refreshKey, onStarted }: { refreshKey: number; onStarted: (
       <CardFooter className="border-t pt-4">
         <Button className="w-full" onClick={start} disabled={!canRun}>
           {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-          {t('market.run')}
+          {staff ? t('market.run') : t('market.runCredits', { n: price })}
         </Button>
       </CardFooter>
     </Card>
@@ -375,6 +390,8 @@ function HistoryCard({
   onLoaded: (firstId: number | null) => void;
 }) {
   const { t, lang } = useI18n();
+  // Administrators: every brief, with its AI cost. Customers: the ones they started.
+  const staff = useAuth().user?.isStaff ?? false;
   const [page, setPage] = useState(1);
   const [limit, setLimit] = usePageSize('market-history');
   const [data, setData] = useState<Paginated<MarketRun> | null>(null);
@@ -438,9 +455,12 @@ function HistoryCard({
           return <span title={text} className={cn(!r.headlineEn && 'text-muted-foreground')}>{text}</span>;
         },
       },
-      { id: 'cost', header: t('market.col.cost'), size: 100, minSize: 84, meta: { align: 'right' }, cell: ({ row }) => formatCredit(row.original.cost) },
+      // What the AI cost us is for administrators.
+      ...(staff
+        ? [{ id: 'cost', header: t('market.col.cost'), size: 100, minSize: 84, meta: { align: 'right' as const }, cell: ({ row }: { row: { original: MarketRun } }) => formatCredit(row.original.cost) }]
+        : []),
     ],
-    [t, lang],
+    [t, lang, staff],
   );
 
   return (

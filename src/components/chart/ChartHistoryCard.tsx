@@ -8,6 +8,7 @@ import { api, describeError } from '@/api/client';
 import type { ChartAnalysis, ChartMode, Paginated } from '@/api/types';
 import { Pagination, usePageSize } from '@/components/Pagination';
 import { ALL, TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
+import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime, formatNumber } from '@/utils/format';
 import { CallChip, CHART_HORIZONS, Verdict } from './ChartAnalysisView';
@@ -16,6 +17,8 @@ import { formatCost } from './format';
 /** Every chart analysis, newest moment first; a row opens it above. */
 export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (a: ChartAnalysis) => void }) {
   const { t, lang } = useI18n();
+  // Administrators see every analysis with its AI cost; a customer sees the ones they unlocked.
+  const staff = useAuth().user?.isStaff ?? false;
   const [page, setPage] = useState(1);
   const [limit, setLimit] = usePageSize('chart-history', 20);
   const [data, setData] = useState<(Paginated<ChartAnalysis> & { totalCost: number }) | null>(null);
@@ -39,7 +42,7 @@ export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (
     <Card role="region" aria-label={t('chart.history')}>
       <CardHeader>
         <CardTitle>{t('chart.history')}</CardTitle>
-        {data && data.total > 0 && (
+        {staff && data && data.total > 0 && (
           <CardDescription className="tabular-nums">{t('chart.historyTotal', { n: formatNumber(data.total), cost: formatCost(data.totalCost) })}</CardDescription>
         )}
       </CardHeader>
@@ -48,7 +51,7 @@ export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (
           <TableToolbar
             label={t('chart.history')}
             search={{ value: list.search, onChange: list.setSearch, placeholder: t('chart.searchCoin') }}
-            filters={[
+            filters={staff ? [
               {
                 id: 'mode',
                 label: t('chart.filterMode'),
@@ -57,7 +60,7 @@ export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (
                 value: list.filters.mode,
                 onChange: list.set('mode'),
               },
-            ]}
+            ] : []}
             onReset={list.reset}
           />
         )}
@@ -76,7 +79,7 @@ export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (
                   {CHART_HORIZONS.map((h) => (
                     <TableHead key={h}>{t(`chart.h.${h}`)}</TableHead>
                   ))}
-                  <TableHead className="text-right">{t('chart.col.cost')}</TableHead>
+                  {staff && <TableHead className="text-right">{t('chart.col.cost')}</TableHead>}
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -100,12 +103,14 @@ export function ChartHistoryCard({ reload, onOpen }: { reload: number; onOpen: (
                         </span>
                       </TableCell>
                     ))}
-                    <TableCell
-                      className="text-right whitespace-nowrap tabular-nums"
-                      title={t('chart.tokens', { input: formatNumber(a.promptTokens), output: formatNumber(a.completionTokens) })}
-                    >
-                      {formatCredit(a.cost)}
-                    </TableCell>
+                    {staff && (
+                      <TableCell
+                        className="text-right whitespace-nowrap tabular-nums"
+                        title={t('chart.tokens', { input: formatNumber(a.promptTokens), output: formatNumber(a.completionTokens) })}
+                      >
+                        {formatCredit(a.cost)}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => onOpen(a)}>
                         {t('chart.open')}

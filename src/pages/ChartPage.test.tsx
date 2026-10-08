@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import type { Candle, ChartAccuracySummary, ChartAnalysis } from '../api/types';
-import { chooseOption, mockShellApi, renderPage } from '../test/utils';
+import { chooseOption, customerUser, mockShellApi, renderPage } from '../test/utils';
 import { ChartPage } from './ChartPage';
 
 // jsdom has no canvas: record what the page asks TradingView's chart to draw instead.
@@ -112,7 +112,7 @@ describe('ChartPage', () => {
   it('analyses a past moment: sends the chosen time, shows each horizon with its outcome and what the AI was given', async () => {
     // Only the clock is pinned (timers stay real for the UI): "today" is 7 Oct 2026.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-07T12:30') });
-    const analyze = vi.spyOn(api, 'analyzeChart').mockResolvedValue({ analysis: analysis(), cached: false });
+    const analyze = vi.spyOn(api, 'analyzeChart').mockResolvedValue({ analysis: analysis(), cached: false, credits: 0 });
     const user = userEvent.setup();
     renderPage(<ChartPage />, { path: '/chart' });
 
@@ -161,14 +161,28 @@ describe('ChartPage', () => {
   }, 20_000); // many clicks through the calendar: slow when the whole suite runs in parallel
 
   it('a cached result says so and offers a paid re-run', async () => {
-    const analyze = vi.spyOn(api, 'analyzeChart').mockResolvedValue({ analysis: analysis({ backtest: false }), cached: true });
+    const analyze = vi.spyOn(api, 'analyzeChart').mockResolvedValue({ analysis: analysis({ backtest: false }), cached: true, credits: 0 });
     const user = userEvent.setup();
     renderPage(<ChartPage />, { path: '/chart' });
     await user.click(await screen.findByRole('button', { name: 'วิเคราะห์กราฟ' }));
-    expect(await screen.findByText('ผลเดิม (ข้อมูลเหมือนเดิม ไม่เสียเงิน)')).toBeInTheDocument();
+    expect(await screen.findByText('ผลเดิม (ไม่ได้ถาม AI ใหม่)')).toBeInTheDocument();
     expect(analyze.mock.calls[0][0]).toEqual({ symbol: 'BTC' });
     await user.click(screen.getByRole('button', { name: 'วิเคราะห์ใหม่ (เสียค่า AI)' }));
     expect(analyze.mock.calls[1][0]).toEqual({ symbol: 'BTC', force: true });
+  });
+
+  it('gives a customer the analysis priced in credits, without re-runs, accuracy, backtests or AI cost', async () => {
+    const analyze = vi.spyOn(api, 'analyzeChart').mockResolvedValue({ analysis: analysis({ backtest: false }), cached: true, credits: 1 });
+    const user = userEvent.setup();
+    renderPage(<ChartPage />, { path: '/chart', user: customerUser });
+    await user.click(await screen.findByRole('button', { name: 'วิเคราะห์กราฟ · 1 เครดิต' }));
+    expect(analyze.mock.calls[0][0]).toEqual({ symbol: 'BTC' });
+    expect(await screen.findByText('ผลเดิม (ไม่ได้ถาม AI ใหม่)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'วิเคราะห์ใหม่ (เสียค่า AI)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'ความแม่นของการวิเคราะห์กราฟ' })).not.toBeInTheDocument();
+    expect(api.chartSummary).not.toHaveBeenCalled();
+    expect(await screen.findByRole('region', { name: 'ประวัติการวิเคราะห์กราฟ' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'ค่า AI' })).not.toBeInTheDocument();
   });
 
   it('shows accuracy next to always giving the same answer', async () => {

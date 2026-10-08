@@ -10,6 +10,7 @@ import { api, describeError } from '@/api/client';
 import type { Candle, CandleInterval, ChartAnalysis, ChartHorizon } from '@/api/types';
 import { DIRECTION } from '@/components/NewsAnalysisView';
 import { useHealth } from '@/context/HealthContext';
+import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime } from '@/utils/format';
 import { CandleChart, type HorizonMark } from './CandleChart';
@@ -75,6 +76,7 @@ function HorizonTile({ a, h }: { a: ChartAnalysis; h: ChartHorizon }) {
 export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: ChartAnalysis; cached?: boolean }) {
   const { t, lang } = useI18n();
   const showModel = useHealth()?.ui?.showModel !== false;
+  const staff = useAuth().user?.isStaff ?? false;
   const [timeframe, setTimeframe] = useState<CandleInterval>('4h');
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -210,7 +212,8 @@ export function ChartAnalysisView({ analysis: a, cached = false }: { analysis: C
 
       <p className="text-xs text-muted-foreground">
         {showModel && `${a.model} · `}
-        {t('chart.cost', { cost: formatCredit(a.cost) })} · {t('analysis.disclaimer')}
+        {staff && `${t('chart.cost', { cost: formatCredit(a.cost) })} · `}
+        {t('analysis.disclaimer')}
       </p>
     </div>
   );

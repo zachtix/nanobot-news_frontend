@@ -10,6 +10,7 @@ import { AssetOutcome, OutcomeScore, useAnalysisOutcomes } from '@/components/An
 import { chartAssets, ChartCompanionsPanel, useChartCompanions } from '@/components/chart/ChartCompanions';
 import { AssetChip, DIRECTION } from '@/components/NewsAnalysisView';
 import { useHealth } from '@/context/HealthContext';
+import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { formatCredit, formatDateTime } from '@/utils/format';
 
@@ -99,7 +100,8 @@ export function MarketResultView({ run }: { run: MarketRunDetail }) {
   const showModel = health?.ui?.showModel !== false;
   const done = run.status === 'success' && run.result != null;
   // A reused brief was judged as the run that made it.
-  const outcomes = useAnalysisOutcomes('market', run.reusedFromId ?? run.id, run.finishedAt ?? '', done);
+  const outcomes = useAnalysisOutcomes('market', run.id, run.finishedAt ?? '', done);
+  const staff = useAuth().user?.isStaff ?? false;
   const assets = done ? chartAssets(run.result!.assets) : [];
   const chartAt = run.finishedAt ?? run.createdAt;
   const charts = useChartCompanions(assets, chartAt, done);
@@ -253,14 +255,17 @@ export function MarketResultView({ run }: { run: MarketRunDetail }) {
       </CardContent>
 
       <CardFooter className="flex flex-col items-start gap-1 border-t pt-4 text-xs text-muted-foreground">
-        <span>
-          {t('market.cost', { cost: formatCredit(run.cost) })} · {t('market.costBreakdown', {
-            market: formatCredit(run.costMarket),
-            stories: formatCredit(run.costStories),
-            fetch: formatCredit(run.costFetch),
-          })}
-          {run.newlyAnalyzed > 0 && ` · ${t('market.newlyAnalyzed', { n: run.newlyAnalyzed })}`}
-        </span>
+        {/* What the AI cost us is for administrators. */}
+        {staff && (
+          <span>
+            {t('market.cost', { cost: formatCredit(run.cost) })} · {t('market.costBreakdown', {
+              market: formatCredit(run.costMarket),
+              stories: formatCredit(run.costStories),
+              fetch: formatCredit(run.costFetch),
+            })}
+            {run.newlyAnalyzed > 0 && ` · ${t('market.newlyAnalyzed', { n: run.newlyAnalyzed })}`}
+          </span>
+        )}
         <span>
           {showModel && run.model ? `${run.model} · ` : ''}
           {t('analysis.disclaimer')}

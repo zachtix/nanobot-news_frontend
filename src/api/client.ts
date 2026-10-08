@@ -1,3 +1,5 @@
+import { ApiError } from './errors';
+import { authTokens, endSession, renewSession } from './nanobot';
 import type {
   BacktestJob,
   BacktestPlan,
@@ -49,26 +51,30 @@ import type {
   TranslationStatus,
 } from './types';
 
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-    public readonly details?: unknown,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export { ApiError };
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 async function request<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const res = await fetch(`${BASE}/api${path}`, {
-    ...rest,
-    headers: json === undefined ? headers : { 'Content-Type': 'application/json', ...headers },
-    body: json === undefined ? rest.body : JSON.stringify(json),
-  });
+  const send = (token: string | null) =>
+    fetch(`${BASE}/api${path}`, {
+      ...rest,
+      headers: {
+        ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(headers as Record<string, string> | undefined),
+      },
+      body: json === undefined ? rest.body : JSON.stringify(json),
+    });
+
+  const token = authTokens.access();
+  let res = await send(token);
+  // An expired Nanobot access token: renew once and retry; if that fails the session is over.
+  if (res.status === 401 && token) {
+    if (await renewSession()) res = await send(authTokens.access());
+    else endSession();
+  }
   if (res.status === 204) return undefined as T;
 
   const data = await res.json().catch(() => null);
@@ -99,16 +105,22 @@ export function describeError(err: unknown): string {
 export const api = {
   health: () => request<Health>('/health'),
 
+
   listNews: (query: NewsQuery = {}) => request<Paginated<News>>(`/news${toQuery({ ...query })}`),
   newsStats: () => request<NewsStats>('/news/stats'),
   deleteNews: (id: number) => request<void>(`/news/${id}`, { method: 'DELETE' }),
   translateNews: (id: number) => request<News>(`/news/${id}/translate`, { method: 'POST' }),
-  /** Returns the stored analysis, or runs the AI once if the story has none (force = re-analyse). */
+  /**
+   * Administrators: the stored analysis, or run the AI once (force = re-analyse). Customers: unlock it (the stored one,
+   * or the AI for the first to ask); `credits` = what it cost (0 when already theirs).
+   */
   analyzeNews: (id: number, force = false) =>
-    request<{ analysis: NewsAnalysis; cached: boolean }>(`/news/${id}/analysis`, {
+    request<{ analysis: NewsAnalysis; cached: boolean; credits: number }>(`/news/${id}/analysis`, {
       method: 'POST',
       json: force ? { force } : {},
     }),
+  /** How the calls of a story's analysis turned out (same access as the analysis). */
+  newsOutcomes: (id: number) => request<PredictionView[]>(`/news/${id}/outcomes`),
   newsAssets: () => request<AssetOption[]>('/news/assets'),
 
   translationStatus: () => request<TranslationStatus>('/translate/status'),
@@ -164,23 +176,29 @@ export const api = {
 
   marketPreview: (window: MarketWindow, sourceIds: number[]) =>
     request<MarketPreview>(`/market/preview${toQuery({ window, sourceIds: sourceIds.join(',') || undefined })}`),
-  startMarket: (body: MarketRequest) => request<MarketRun>('/market/analyses', { method: 'POST', json: body }),
+  /** Customers: always on fresh news, `credits` charged once the brief is done (administrators: 0). */
+  startMarket: (body: MarketRequest) => request<MarketRun & { credits: number }>('/market/analyses', { method: 'POST', json: body }),
+  /** How a brief's calls turned out (same access as the brief; a reused brief: the original's calls). */
+  marketOutcomes: (id: number) => request<PredictionView[]>(`/market/analyses/${id}/outcomes`),
   marketRuns: (query: { page: number; limit: number; status?: MarketRun['status']; q?: string }) =>
     request<Paginated<MarketRun>>(`/market/analyses${toQuery(query)}`),
   marketRun: (id: number) => request<MarketRunDetail>(`/market/analyses/${id}`),
 
   /** Analyse a coin's chart as of now (no `at`) or a past moment; the same input is reused for free unless forced. */
   analyzeChart: (body: { symbol: string; at?: string; force?: boolean }) =>
-    request<{ analysis: ChartAnalysis; cached: boolean }>('/chart/analyses', { method: 'POST', json: body }),
+    request<{ analysis: ChartAnalysis; cached: boolean; credits: number }>('/chart/analyses', { method: 'POST', json: body }),
   chartAnalyses: (query: { symbol?: string; mode?: ChartMode; batchId?: number; page?: number; limit?: number } = {}) =>
     request<Paginated<ChartAnalysis> & { totalCost: number }>(`/chart/analyses${toQuery(query)}`),
   chartAnalysis: (id: number) => request<ChartAnalysis>(`/chart/analyses/${id}`),
   /** Stored chart calls of these assets as of a news / market call's moment (never calls the AI). */
   chartCompanions: (assets: ChartAsset[], at: string) =>
     request<ChartCompanion[]>(`/chart/companions${toQuery({ assets: assets.map((a) => `${a.assetType}:${a.symbol}`).join(','), at })}`),
-  /** The same, analysing the assets given that have none yet: one AI call per asset, from the chart alone. */
-  runChartCompanions: (assets: ChartAsset[], at: string) =>
-    request<ChartCompanion[]>('/chart/companions', { method: 'POST', json: { assets, at } }),
+  /**
+   * Unlock (customers) or run (administrators) the chart call of the assets given: the stored one, or one AI call per
+   * asset from the chart alone. `credits` = what it cost; `newsId` = the story whose moment it is.
+   */
+  runChartCompanions: (assets: ChartAsset[], at: string, newsId?: number) =>
+    request<{ items: ChartCompanion[]; credits: number }>('/chart/companions', { method: 'POST', json: { assets, at, newsId } }),
   chartSummary: (query: { symbol?: string; mode?: ChartMode } = {}) => request<ChartAccuracySummary>(`/chart/summary${toQuery(query)}`),
   chartCandles: (symbol: string, interval: CandleInterval, before?: string, assetType?: ChartAsset['assetType']) =>
     request<Candle[]>(`/chart/candles${toQuery({ symbol, interval, before, assetType })}`),

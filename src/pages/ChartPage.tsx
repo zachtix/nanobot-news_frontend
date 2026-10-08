@@ -15,7 +15,10 @@ import { ChartAnalysisView } from '@/components/chart/ChartAnalysisView';
 import { ChartHistoryCard } from '@/components/chart/ChartHistoryCard';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { useHealth } from '@/context/HealthContext';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
+import { useCreditPrices } from '@/lib/credits';
 
 const QUICK = ['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE'];
 
@@ -34,6 +37,10 @@ export function ChartPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ analysis: ChartAnalysis; cached: boolean } | null>(null);
+  // Customers pay per asset and hour (the stored call when someone asked before) and see only their own history;
+  // re-runs, accuracy and backtests are for administrators.
+  const staff = useAuth().user?.isStaff ?? false;
+  const price = useCreditPrices().chart;
   const [reload, setReload] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
   const lastDone = useRef(0);
@@ -64,7 +71,9 @@ export function ChartPage() {
     setError(null);
     try {
       const body = { symbol: symbol.trim(), ...(when === 'past' && at ? { at: at.toISOString() } : {}), ...(force ? { force } : {}) };
-      setResult(await api.analyzeChart(body));
+      const res = await api.analyzeChart(body);
+      if (res.credits > 0) toast.success(t('credits.used', { n: res.credits }));
+      setResult(res);
       setReload((n) => n + 1);
     } catch (err) {
       setError(describeError(err));
@@ -140,9 +149,9 @@ export function ChartPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => run()} disabled={busy || aiOff || !symbol.trim() || (when === 'past' && !at)}>
               {busy ? <Loader2 className="animate-spin" aria-hidden /> : <ScanLine aria-hidden />}
-              {busy ? t('chart.running') : t('chart.run')}
+              {busy ? t('chart.running') : staff ? t('chart.run') : t('chart.runCredits', { n: price })}
             </Button>
-            {result?.cached && (
+            {staff && result?.cached && (
               <Button variant="outline" onClick={() => run(true)} disabled={busy || aiOff}>
                 {t('chart.rerun')}
               </Button>
@@ -168,8 +177,8 @@ export function ChartPage() {
         )}
       </div>
 
-      <ChartAccuracyCard reload={reload} />
-      <BacktestCard onProgress={onBacktest} />
+      {staff && <ChartAccuracyCard reload={reload} />}
+      {staff && <BacktestCard onProgress={onBacktest} />}
       <ChartHistoryCard reload={reload} onOpen={open} />
     </div>
   );

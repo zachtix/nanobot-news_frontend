@@ -115,7 +115,7 @@ export function NewsCard({ news, canTranslate = false, canAnalyze = false, onUpd
             {summary && <p className="line-clamp-2 text-sm text-muted-foreground">{summary}</p>}
             {translateError && <p className="text-sm text-danger">{t('news.translateError', { error: translateError })}</p>}
 
-            <NewsAnalysisView news={news} canAnalyze={canAnalyze} onAnalyzed={(analysis) => onUpdated?.({ ...news, analysis })} />
+            <NewsAnalysisView news={news} canAnalyze={canAnalyze} onAnalyzed={(analysis) => onUpdated?.({ ...news, analysis, analysisLocked: false })} />
 
             <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-1.5">

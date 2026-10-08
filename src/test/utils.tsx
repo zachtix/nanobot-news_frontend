@@ -5,9 +5,10 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 import { api } from '../api/client';
-import type { ChartAnalysis, FetchRun, FetchStatus, News, NewsReference, Source } from '../api/types';
+import type { AuthUser, ChartAnalysis, FetchRun, FetchStatus, News, NewsReference, Source } from '../api/types';
 import { Layout } from '../components/Layout';
 import { TooltipProvider } from '../components/ui/tooltip';
+import { AuthProvider } from '../context/AuthContext';
 import { FetchStatusProvider } from '../context/FetchStatusContext';
 import { HealthProvider } from '../context/HealthContext';
 import { I18nProvider } from '../i18n/I18nContext';
@@ -139,6 +140,10 @@ export function makeChartAnalysis(overrides: Partial<ChartAnalysis> = {}): Chart
   };
 }
 
+/** Accounts to render as: an administrator (sees and runs everything, free) or a customer (unlocks with credits). */
+export const adminUser: AuthUser = { id: 'uid-admin', email: 'admin@nanobot.app', name: null, role: 'ADMIN', isStaff: true };
+export const customerUser: AuthUser = { id: 'uid-user', email: 'user@nanobot.app', name: null, role: 'USER', isStaff: false };
+
 export const idleStatus: FetchStatus = { running: false, run: null, lastRun: null };
 
 /** Stub every endpoint the shell (layout + status polling) touches. */
@@ -150,34 +155,41 @@ export function mockShellApi(status: FetchStatus = idleStatus) {
 }
 
 /** Render a page inside the real layout, router and fetch-status provider. */
-export function renderPage(page: ReactElement, { path = '/', activePollMs = 20, lang = 'th' as Lang } = {}) {
+export function renderPage(
+  page: ReactElement,
+  { path = '/', activePollMs = 20, lang = 'th' as Lang, user = adminUser as AuthUser | null } = {},
+) {
   return render(
     <UiProviders>
       <I18nProvider defaultLang={lang}>
-        <HealthProvider>
-          <MemoryRouter initialEntries={[path]}>
-            <FetchStatusProvider activePollMs={activePollMs} idlePollMs={60_000}>
-              <Routes>
-                <Route element={<Layout />}>
-                  <Route path="*" element={page} />
-                </Route>
-              </Routes>
-            </FetchStatusProvider>
-          </MemoryRouter>
-        </HealthProvider>
+        <AuthProvider user={user}>
+          <HealthProvider>
+            <MemoryRouter initialEntries={[path]}>
+              <FetchStatusProvider activePollMs={activePollMs} idlePollMs={60_000}>
+                <Routes>
+                  <Route element={<Layout />}>
+                    <Route path="*" element={page} />
+                  </Route>
+                </Routes>
+              </FetchStatusProvider>
+            </MemoryRouter>
+          </HealthProvider>
+        </AuthProvider>
       </I18nProvider>
     </UiProviders>,
   );
 }
 
-/** Render a single component with only the i18n provider (and a router for its links). */
-export function renderWithI18n(ui: ReactElement, lang: Lang = 'th') {
+/** Render a single component with the i18n provider, a router for its links, and an account (default: administrator). */
+export function renderWithI18n(ui: ReactElement, lang: Lang = 'th', user: AuthUser | null = adminUser) {
   // `wrapper` (not wrapping `ui`) so `rerender` keeps the providers.
   return render(ui, {
     wrapper: ({ children }) => (
       <UiProviders>
         <I18nProvider defaultLang={lang}>
-          <MemoryRouter>{children}</MemoryRouter>
+          <AuthProvider user={user}>
+            <MemoryRouter>{children}</MemoryRouter>
+          </AuthProvider>
         </I18nProvider>
       </UiProviders>
     ),
