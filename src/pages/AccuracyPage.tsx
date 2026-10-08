@@ -28,6 +28,7 @@ import { DataTable } from '@/components/DataTable';
 import { DIRECTION } from '@/components/NewsAnalysisView';
 import { Pagination, usePageSize } from '@/components/Pagination';
 import { ALL, TableToolbar, filterValue, useTableFilters } from '@/components/TableToolbar';
+import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import type { MessageKey } from '@/i18n/messages';
 import { formatDateTime } from '@/utils/format';
@@ -38,9 +39,14 @@ const STATUS_BADGE = { pending: 'secondary', done: 'success', unsupported: 'warn
 
 const signed = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
 
-/** How right the AI's asset calls turned out against real prices, and what is fed back to it. */
+/**
+ * How right the AI's asset calls turned out against real prices, and what is fed back to it. Administrators see the
+ * whole system; a customer sees the stories and briefs they unlocked (the API scopes it), without the AI's feedback
+ * or fetching prices now.
+ */
 export function AccuracyPage() {
   const { t } = useI18n();
+  const staff = useAuth().user?.isStaff ?? false;
   const [source, setSource] = useState<PredictionSource>('analysis');
   const [summary, setSummary] = useState<OutcomeSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +82,7 @@ export function AccuracyPage() {
         <div className="max-w-3xl">
           <h1 className="text-2xl font-semibold">{t('acc.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('acc.subtitle')}</p>
+          {!staff && <p className="mt-1 text-sm font-medium">{t('acc.ownOnly')}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ToggleGroup
@@ -91,10 +98,12 @@ export function AccuracyPage() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <Button variant="outline" onClick={refresh} disabled={refreshing}>
-            <RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden />
-            {t('acc.refresh')}
-          </Button>
+          {staff && (
+            <Button variant="outline" onClick={refresh} disabled={refreshing}>
+              <RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden />
+              {t('acc.refresh')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -103,7 +112,7 @@ export function AccuracyPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      {summary && !summary.tracking && (
+      {staff && summary && !summary.tracking && (
         <Alert role="status" className="border-warning/40 bg-warning-bg text-warning">
           <AlertDescription className="text-warning">
             {t('acc.trackingOff')}{' '}
@@ -137,7 +146,8 @@ export function AccuracyPage() {
             {t('acc.counts', { pending: summary.counts.pending, done: summary.counts.done, unsupported: summary.counts.unsupported })}
           </p>
 
-          <FeedbackCard summary={summary} />
+          {/* What the AI is told comes from the whole system: for administrators. */}
+          {staff && <FeedbackCard summary={summary} />}
           <GroupsCard summary={summary} />
         </>
       )}

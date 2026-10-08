@@ -19,14 +19,14 @@ import { FetchNowButton } from './FetchNowButton';
 import { LanguageMenu } from './LanguageMenu';
 import { ThemeToggle } from './ThemeToggle';
 
-/** `staff`: administrators only (ROOT / SENIOR / ADMIN); customers see the news, market and chart pages. */
+/** `staff`: administrators only (ROOT / SENIOR / ADMIN); customers see the news, market, chart and accuracy pages. */
 const NAV: { to: string; label: MessageKey; end?: boolean; staff?: boolean }[] = [
   { to: '/', label: 'nav.news', end: true },
   { to: '/market', label: 'nav.market' },
   { to: '/chart', label: 'nav.chart' },
   { to: '/sources', label: 'nav.sources', staff: true },
   { to: '/ai-usage', label: 'nav.aiUsage', staff: true },
-  { to: '/accuracy', label: 'nav.accuracy', staff: true },
+  { to: '/accuracy', label: 'nav.accuracy' },
   { to: '/settings', label: 'nav.settings', staff: true },
 ];
 

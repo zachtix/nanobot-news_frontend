@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import type { OutcomeSummary, PredictionView } from '../api/types';
-import { chooseOption, mockShellApi, renderPage } from '../test/utils';
+import { customerUser, chooseOption, mockShellApi, renderPage } from '../test/utils';
 import { AccuracyPage } from './AccuracyPage';
 
 const FEEDBACK = 'TRACK RECORD of your earlier per-story calls, checked against real prices.\nOverall: all calls → 55% right (n=40).';
@@ -170,5 +170,12 @@ describe('AccuracyPage', () => {
     await user.click(within(section).getByRole('button', { name: 'ล้างตัวกรอง' }));
     await waitFor(() => expect(api.outcomePredictions).toHaveBeenLastCalledWith(expect.objectContaining({ q: undefined, eventType: undefined })));
   });
-});
 
+  it('tells a customer the record is their own, without the AI feedback or fetching prices', async () => {
+    renderPage(<AccuracyPage />, { path: '/accuracy', user: customerUser });
+    expect(await screen.findByText('สถิตินี้นับเฉพาะข่าวและการวิเคราะห์ตลาดที่คุณปลดล็อก')).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'หลังข่าว 1h' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'สิ่งที่ส่งให้ AI ตอนนี้' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'อัปเดตราคา' })).not.toBeInTheDocument();
+  });
+});

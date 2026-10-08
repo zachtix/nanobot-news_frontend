@@ -130,11 +130,11 @@ describe('sign-in and the settings guard', () => {
     expect(authTokens.access()).toBeNull();
   });
 
-  it('shows administrators every page and the fetch button, customers the news, market and chart', async () => {
+  it('shows administrators every page and the fetch button, customers the news, market, chart and accuracy', async () => {
     mockShellApi();
     const { unmount } = renderPage(<p>x</p>, { user: customerUser });
     const nav = screen.getByRole('navigation', { name: 'main' });
-    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['ข่าว', 'วิเคราะห์ตลาด', 'วิเคราะห์กราฟ']);
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['ข่าว', 'วิเคราะห์ตลาด', 'วิเคราะห์กราฟ', 'ความแม่นของ AI']);
     // Fetching news now is for administrators.
     expect(screen.queryByRole('button', { name: 'ดึงข่าวตอนนี้' })).not.toBeInTheDocument();
     unmount();

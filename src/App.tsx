@@ -62,12 +62,13 @@ export function App() {
                     </RequireStaffRole>
                   }
                 />
+                {/* Anyone signed in: administrators see the whole system, a customer their own unlocked calls. */}
                 <Route
                   path="accuracy"
                   element={
-                    <RequireStaffRole>
+                    <RequireSignIn>
                       <AccuracyPage />
-                    </RequireStaffRole>
+                    </RequireSignIn>
                   }
                 />
                 <Route
